@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{% if object %}분실물 수정{% else %}분실물 등록{% endif %} - PickupLog{% endblock %}
+{% block content %}
+<h2>{% if object %}분실물 수정{% else %}분실물 등록{% endif %}</h2>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">저장</button>
+  <a href="{% url 'lostitem_list' %}">목록</a>
+</form>
+{% endblock %}

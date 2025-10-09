@@ -1,0 +1,48 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/pico.min.css' %}">
+
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>{% block title %}PickupLog{% endblock %}</title>
+    
+    <link href="{% static 'css/pico.min.css' %}" rel="stylesheet">
+    
+    <style>
+        /* 기본 레이아웃 스타일 */
+        .chips { display:flex; flex-wrap:wrap; gap:.5rem; }
+        .chip { padding:.35rem .7rem; border:1px solid #ddd; border-radius:999px; font-size:.9rem; }
+        .chip a { text-decoration:none; }
+        .meta { color:#666; font-size:.85rem; }
+        
+        /* Django Messages 스타일 오버라이드 */
+        .alert-success { background-color: var(--pico-background-success); color: var(--pico-text-success); border-color: var(--pico-border-success); }
+        .alert-error, .alert-danger { background-color: var(--pico-background-error); color: var(--pico-text-error); border-color: var(--pico-border-error); }
+        .alert-info { background-color: var(--pico-background-primary); color: var(--pico-text-primary); border-color: var(--pico-border-primary); }
+        .messages { padding: 0; }
+        .messages li { list-style: none; padding: 1rem; margin-bottom: 1rem; border-radius: var(--pico-border-radius); }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <main role="main" class="container">
+        <h1 style="margin-top:1rem"><a href="{% url 'lostitem_list' %}">PickupLog</a></h1>
+        
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li class="alert alert-{{ message.tags|default:'info' }}" role="alert">
+                        {{ message }}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% block content %}
+        {% endblock content %}
+        
+    </main>
+    {% block extra_body %}{% endblock %}
+</body>
+</html>

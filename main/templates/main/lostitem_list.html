@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+    <div class="grid">
+        <div class="col-12">
+            <h2>분실물 목록 및 검색</h2>
+        </div>
+    </div>
+
+    <form method="get" class="grid" role="search" novalidate>
+        <div class="col-12">
+            <div class="grid">
+                <div class="col-sm-3"><label for="id_q">키워드</label>{{ form.q }}</div>
+                <div class="col-sm-3"><label for="id_transport">교통수단</label>{{ form.transport }}</div>
+                <div class="col-sm-3"><label for="id_status">상태</label>{{ form.status }}</div>
+                
+                <div class="col-sm-3">
+                    <label>카테고리</label>
+                    <div style="
+                        max-height: 150px; 
+                        overflow-y: auto; 
+                        border: 1px solid var(--pico-form-element-border-color); 
+                        padding: 0.5rem;
+                        border-radius: var(--pico-border-radius);
+                    ">
+                        {% for choice in form.category %}
+                            <div style="margin-bottom: 0.2rem; line-height: 1.2;">
+                                {{ choice.tag }}
+                                <label for="{{ choice.id_for_label }}" style="display: inline;">
+                                    {{ choice.choice_label }}
+                                </label>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                </div>
+            
+            <div class="grid" style="margin-top: 1rem;">
+                <div class="col-sm-3"><label for="id_date_from">등록 시작</label>{{ form.date_from }}</div>
+                <div class="col-sm-3"><label for="id_date_to">등록 끝</label>{{ form.date_to }}</div>
+                <div class="col-sm-3"><label for="id_sort">정렬</label>{{ form.sort }}</div>
+                <div class="col-sm-3"><label for="id_page_size">표시 개수</label>{{ form.page_size }}</div>
+            </div>
+            
+            <div style="margin-top: 1rem;">
+                {{ form.only_unreceived }}
+                <label for="id_only_unreceived" style="display: inline;">미수령만</label>
+            </div>
+        </div>
+
+        <div class="col-12" style="margin-top: 1rem;">
+            <button type="submit" class="contrast">검색</button>
+            <a href="{% url 'lostitem_list' %}" role="button" class="secondary">초기화</a>
+            <a href="{% url 'lostitem_create' %}" role="button" class="primary float-right">새 분실물 등록</a>
+            <a href="{% url 'lostitem_upload_csv' %}" role="button" class="secondary float-right" style="margin-right: 1rem;">CSV 업로드</a>
+        </div>
+    </form>
+    
+    <hr>
+
+    <hr>
+    
+    <p>총 <b>{{ total_count }}</b>건</p>
+
+    {% if categories %}
+    <div class="chips" style="margin-bottom: 1.5rem;">
+        {% for cat in categories %}
+        <span class="chip">
+            <a href="?category={{ cat.category|urlencode }}{{ url_query_string }}">{{ cat.category }}</a> ({{ cat.cnt }})
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if items %}
+    <div class="table-container">
+        <table border=>
+            <thead>
+                <tr>
+                    <th scope="col">분실물명</th>
+                    <th scope="col">카테고리</th>
+                    <th scope="col">등록일</th>
+                    <th scope="col">상태</th>
+                    <th scope="col">보관장소</th>
+                    <th scope="col">조회수</th>
+                    <th scope="col">수정</th>
+                </tr> 
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td><a href="{% url 'lostitem_update' pk=item.pk %}">{{ item.item_name }}</a></td>
+                    <td>{{ item.category }}</td>
+                    <td>{{ item.registered_at|date:"Y-m-d" }}</td>
+                    <td><mark>{{ item.status }}</mark></td>
+                    <td>{{ item.storage_location }}</td>
+                    <td>{{ item.views }}</td>
+                    <td><a href="{% url 'lostitem_update' pk=item.pk %}" role="button" class="secondary">수정</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% else %}
+    <p><b>검색 결과가 없습니다.</b></p>
+    {% endif %}
+
+
+    {% if page_obj.has_other_pages %}
+        <nav aria-label="Page navigation" style="margin-top: 2rem;">
+            <ul class="pagination justify-content-center">
+                
+                {% if page_obj.number > 1 %}
+                <li>
+                    <a href="?page={{ page_obj.previous_page_number }}{{ url_query_string }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="disabled">
+                    <span aria-hidden="true">&laquo;</span>
+                </li>
+                {% endif %}
+                
+                {% for i in page_obj.paginator.page_range %}
+                    {% if page_obj.number == i %}
+                        <li class="active" aria-current="page"><a href="#">{{ i }}</a></li>
+                    {% elif i >= page_obj.number|add:-5 and i <= page_obj.number|add:5 %}
+                        <li>
+                            <a href="?page={{ i }}{{ url_query_string }}">
+                                {{ i }}
+                            </a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li>
+                    <a href="?page={{ page_obj.next_page_number }}{{ url_query_string }}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="disabled">
+                    <span aria-hidden="true">&raquo;</span>
+                </li>
+                {% endif %}
+
+            </ul>
+        </nav>
+    {% endif %}
+    
+{% endblock content %}
