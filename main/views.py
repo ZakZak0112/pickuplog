@@ -1,274 +1,157 @@
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Sum, Avg # Avg 추가
 from django.core.paginator import Paginator, EmptyPage
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone 
 from django.conf import settings 
 from django.contrib import messages 
 from django.db import IntegrityError 
+from django.http import HttpResponse
 
-import csv
-import requests
-from datetime import datetime
-from io import TextIOWrapper 
-
-from .models import LostItem
+# 프로젝트 모델 임포트
+from .models import LostItem, RidershipDaily, RainImpactReport, WeatherDaily 
 from .forms import LostItemSearchForm, LostItemForm, LostItemCsvUploadForm 
 
+# API/CSV 처리는 뷰에서 제거 (별도 커맨드 파일로 분리해야 함)
+import csv
+from io import TextIOWrapper 
 
 # ----------------------------------------------------------------------
 # Helper Functions (도우미 함수)
 # ----------------------------------------------------------------------
 
-# 날짜/시간 형식 변환 및 Timezone 적용
+# 날짜/시간 형식 변환 및 Timezone 적용 (기존 코드 유지)
 def parse_date_and_make_aware(date_str):
     if not date_str or date_str.strip() in ['00:00.0', '']:
         return None
     
-    # 공백 제거 후 첫 번째 부분(날짜)만 파싱 시도
     date_part = date_str.strip().split(' ')[0]
-    #/ 파싱
     date_part = date_part.replace('/', '-')
     
     try:
-        # 'YYYY-MM-DD' 형식으로 파싱 시도
         naive_datetime = datetime.strptime(date_part, '%Y-%m-%d').replace(hour=0, minute=0, second=0)
-        
-        # Timezone 정보 강제 부여
         return timezone.make_aware(
             naive_datetime, 
             timezone=timezone.get_current_timezone() 
         )
     except ValueError:
-        return None # 파싱 실패
+        return None 
 
 
 # ----------------------------------------------------------------------
-# Views (뷰 함수 정의)
+# 1. PickUpLog 핵심 뷰: 오늘의 분실 예보
 # ----------------------------------------------------------------------
 
-# 분실물 목록 조회 및 검색
-def lostitem_list(request):
-    form = LostItemSearchForm(request.GET or None)
-    qs = LostItem.objects.all()
-
-    if form.is_valid():
-        cd = form.cleaned_data
+def home(request):
+    """
+    PickUpLog 홈 화면 뷰: 사용자가 입력한 노선에 대한 오늘의 분실 예보를 제공합니다.
+    """
+    # 1. 사용자 입력 받기 (오늘 날씨와 기본 노선을 가정)
+    line_input = request.GET.get('line', 'LINE2') # 기본값: 2호선
+    date_condition = request.GET.get('condition', '평소') 
+    is_rainy_today = (date_condition == '비오는 날')
+    
+    # 분석 기준 날짜 (가장 최근 동기화된 날짜를 사용)
+    latest_date = RidershipDaily.objects.order_by('-date').values_list('date', flat=True).first()
+    
+    # 2. 정규화 분실률 계산을 위한 데이터 조회
+    # 해당 노선의 평균 이용자 수 (최근 90일 평균 사용 가정)
+    avg_ridership = RidershipDaily.objects.filter(
+        line_code=line_input,
+        date__gte=timezone.now().date() - timezone.timedelta(days=90)
+    ).aggregate(avg_total=Avg('total'))['avg_total'] or 1.0 # 0으로 나누는 것 방지
+    
+    # 3. 노선별 기본 카테고리 비율 계산
+    top_categories_qs = LostItem.objects.filter(
+        line=line_input,
+        registered_at__isnull=False,
+        registered_at__date__gte=timezone.now().date() - timezone.timedelta(days=90) # 최근 90일 데이터 사용
+    ).values('category').annotate(
+        raw_count=Count('category')
+    ).order_by('-raw_count')[:5] # 상위 5개 카테고리
+    
+    report_items = []
+    special_warning = "분실물 발생 위험은 평소 수준입니다."
+    
+    # 4. 오늘의 분실 예보 계산 및 가중치 적용
+    
+    for item in top_categories_qs:
+        category = item['category']
+        raw_count = item['raw_count']
         
-        # 1. 검색어 (q)
-        if cd.get("q"):
-            q = cd["q"]
-            qs = qs.filter(
-                Q(item_name__icontains=q) |
-                Q(description__icontains=q) |
-                Q(storage_location__icontains=q) |
-                Q(station__icontains=q)
-            )
-            
-        # 2. 기타 필터링 조건들
-        if cd.get("transport"):
-            qs = qs.filter(transport=cd["transport"])
-        if cd.get("status"):
-            qs = qs.filter(status=cd["status"])
-        if cd.get("category"):
-            if cd["category"]: 
-                qs = qs.filter(category__in=cd["category"]) # __in을 사용하여 리스트의 모든 값과 비교
-        if cd.get("only_unreceived"):
-            qs = qs.filter(is_received=False)
-            
-        # 3. 날짜 범위 필터링
-        if cd.get("date_from"):
-            qs = qs.filter(registered_at__date__gte=cd["date_from"])
-        if cd.get("date_to"):
-            qs = qs.filter(registered_at__date__lte=cd["date_to"])
-
-        # 4. 정렬
-        sort = cd.get("sort") or "registered_at_desc"
-        if sort == "registered_at_desc": qs = qs.order_by("-registered_at")
-        elif sort == "registered_at_asc": qs = qs.order_by("registered_at")
-        elif sort == "views_desc": qs = qs.order_by("-views")
+        # 정규화된 분실률 (Loss Rate per 10k)
+        normalized_loss_rate = (raw_count / avg_ridership) * 10000 
         
-        # 5. 페이지 크기
-        page_size = cd.get("page_size") or 30
+        weather_weight = 1.0 # 기본 가중치
+        umbrella_impact_ratio = 1.0
+        
+        # 💡 날씨 조건 반영 (가설 G2: 비 오는 날 우산 급증)
+        if is_rainy_today:
+            
+            # RainImpactReport에서 해당 노선의 비 영향 지수를 가져옵니다.
+            # 이 지수를 사용하여 혼잡도 변화를 반영할 수 있습니다.
+            rain_report = RainImpactReport.objects.filter(
+                line_code=line_input
+            ).order_by('-created_at').first()
+            
+            if category == '우산' and rain_report:
+                # 우산 가중치: 임시로 RII 지수를 사용 (RII=100을 기준으로 가중치 부여)
+                # 비오는 날 승하차량이 20% 증가하면 (RII=120), 우산 분실률도 2.0배 증가한다고 가정
+                weather_weight = max(1.0, rain_report.rain_impact_index / 60) # RII 120이면 2.0으로 가중치
+                umbrella_impact_ratio = weather_weight
+                special_warning = f"비 오는 날 혼잡도가 높습니다. 우산 분실률이 약 {umbrella_impact_ratio:.1f}배 높습니다. 주의하세요."
+            elif category == '가방':
+                # 가방은 혼잡도(RII)에 비례하여 약간 증가한다고 가정
+                if rain_report and rain_report.rain_impact_index > 100:
+                     weather_weight = 1.0 + (rain_report.rain_impact_index - 100) / 500 # RII 120이면 1.04배
+                     
+        
+        # 최종 예측 비율 (정규화된 비율 * 가중치)
+        final_prediction = normalized_loss_rate * weather_weight
+        report_items.append({
+            'category': category,
+            'prediction': final_prediction,
+        })
+        
+    # 최종 예측 비율을 기준으로 상위 3개만 선택하고 비율로 변환
+    sorted_items = sorted(report_items, key=lambda x: x['prediction'], reverse=True)[:3]
+    total_prediction_sum = sum(item['prediction'] for item in sorted_items)
+    
+    if total_prediction_sum > 0:
+        for item in sorted_items:
+            item['rate'] = round((item['prediction'] / total_prediction_sum) * 100, 1) # 백분율로 변환
     else:
-        # 기본 정렬 및 페이지 크기
-        qs = qs.order_by("-registered_at")
-        page_size = 30
-    
-    # 카테고리 집계 (검색 조건 적용 후)
-    categories = (
-        qs.values("category").annotate(cnt=Count("id")).order_by("-cnt","category")[:50]
-    )
+        # 데이터가 없는 경우를 대비
+        sorted_items = [{'category': 'N/A', 'rate': 0.0}]
 
-    # 페이징 처리
-    paginator = Paginator(qs, page_size)
-    
-    # 요청 페이지 번호 검증 및 예외 처리
-    try:
-        page_obj = paginator.get_page(request.GET.get("page"))
-    except EmptyPage:
-        # 페이지 번호가 범위를 벗어날 경우 (1보다 작거나 너무 클 경우), 마지막 페이지를 보여줍니다.
-        page_obj = paginator.page(paginator.num_pages) 
-    
-    # 템플릿의 페이징 링크 생성을 위한 쿼리스트링 헬퍼 준비
-    query_params = request.GET.copy()
-    if 'page' in query_params:
-        del query_params['page']
-    
-    # 쿼리스트링이 있으면 앞에 '&'를 붙여서 URL에 쉽게 추가할 수 있도록 준비
-    url_query_string = '&' + query_params.urlencode() if query_params else ''
-
-
-    ctx = {
-        "form": form,
-        "items": page_obj.object_list,
-        "page_obj": page_obj,
-        "paginator": paginator,
-        "categories": categories,
-        "total_count": paginator.count,
-        "url_query_string": url_query_string, # 템플릿으로 전달
+    # 5. 리포트 출력 데이터
+    report = {
+        'line': line_input,
+        'date_condition': date_condition,
+        'latest_date': latest_date,
+        'items': sorted_items,
+        'warning': special_warning
     }
-    return render(request, "main/lostitem_list.html", ctx)
-
-
-# 분실물 생성 (LostItemForm 사용)
-def lostitem_create(request):
-    if request.method == "POST":
-        form = LostItemForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "새로운 분실물이 등록되었습니다.")
-            return redirect("lostitem_list")
-    else:
-        form = LostItemForm()
-    return render(request, "main/lostitem_form.html", {"form": form})
-
-# 분실물 수정 (LostItemForm 사용)
-def lostitem_update(request, pk):
-    obj = get_object_or_404(LostItem, pk=pk)
-    if request.method == "POST":
-        form = LostItemForm(request.POST, instance=obj)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"'{obj.item_name}' 정보가 수정되었습니다.")
-            return redirect("lostitem_list")
-    else:
-        form = LostItemForm(instance=obj)
-    return render(request, "main/lostitem_form.html", {"form": form, "object": obj})
-
-
-# CSV 파일 업로드 및 처리 (스트림 방식)
-def lostitem_upload_csv(request):
-    if request.method == 'POST':
-        form = LostItemCsvUploadForm(request.POST, request.FILES)
-        if form.is_valid():
-            csv_file = request.FILES['csv_file']
-            
-            if not csv_file.name.endswith('.csv'):
-                messages.error(request, 'CSV 파일만 업로드할 수 있습니다.')
-                return redirect('lostitem_list')
-
-            success_count = 0
-            fail_count = 0
-            
-            try:
-                # 1. 파일 스트림 열기 (인코딩 우선순위)
-                try:
-                    csv_file_wrapper = TextIOWrapper(csv_file, encoding='utf-8', newline='', errors='replace') 
-                except Exception:
-                    csv_file_wrapper = TextIOWrapper(csv_file, encoding='cp949', newline='', errors='replace')
-                
-                reader = csv.reader(csv_file_wrapper)
-                next(reader) # 헤더(첫 번째 줄) 건너뛰기
-                
-                # 2. 데이터 처리 루프
-                for row in reader:
-                    
-                    if not row or len(row) < 11: 
-                        fail_count += 1
-                        continue # 빈 줄 또는 부족한 열 건너뛰기
-                    
-                    # CSV 순서: 0:분실물SEQ, 1:분실물상태, 2:등록일자, 3:수령일자, 4:유실물상세내용, 5:보관장소, 
-                    # 6:분실물등록자ID, 7:분실물명, 8:분실물종류, 9:수령위치(회사), 10:조회수
-                    
-                    try:
-                        registered_dt = parse_date_and_make_aware(row[2])
-                        received_dt = parse_date_and_make_aware(row[3])
-                        
-                        LostItem.objects.create(
-                            item_id=row[0], 
-                            status=row[1], 
-                            registered_at=registered_dt, 
-                            received_at=received_dt, 
-                            description=row[4], 
-                            storage_location=row[5], 
-                            registrar_id=row[6], 
-                            item_name=row[7], 
-                            category=row[8], 
-                            pickup_company_location=row[9], 
-                            views=int(row[10] or 0), 
-                            is_received=(row[1].strip() == '수령')
-                        )
-                        success_count += 1
-                        
-                    except IntegrityError:
-                        fail_count += 1
-                    except Exception:
-                        fail_count += 1
-
-            except Exception as e:
-                # 파일 인코딩 오류 등
-                messages.error(request, f'파일 처리 중 치명적인 오류 발생: {e}')
-                return redirect('lostitem_upload_csv')
-
-            
-            messages.success(request, f'CSV 업로드 완료! 성공 {success_count}건, 실패/중복 {fail_count}건.')
-            return redirect('lostitem_list') 
-            
-        else:
-            messages.error(request, '유효하지 않은 파일입니다. CSV 파일을 선택해주세요.')
-            
-    else:
-        form = LostItemCsvUploadForm()
-        
-    return render(request, 'main/lostitem_csv_upload.html', {'form': form})
-
-#API 연결
-response = requests.get("http://openapi.seoul.go.kr:8088/6671454b426c6f763833785471726d/json/lostArticleInfo/1/1000/") #1번부터 1000번까지 불러옴
-api_data = response.json() 
-LostItem.objects.all().delete()
-
-#수동 리스트
-busList = ["중부운수", "대진여객", "원버스", 
-           "상진운수", "성원여객", "보성운수",
-           "동성교통", "도선여객", "선진운수",
-           "남성교통", "삼양교통"]
-taxiList = ["삼이택시", "동화통운", "고려운수", 
-            "경일운수", "동도자동차", "안전한택시", 
-            "양평운수", "대진흥업", "승진통상",
-            "백제운수", "삼익택시", "새한택시",
-            "경서운수", "대하운수", "동성상운",]
-
-for data in api_data["lostArticleInfo"]["row"]:
-    obj, created = LostItem.objects.update_or_create(
-        item_id=data.get("LOST_MNG_NO"),
-        defaults = {
-        "item_id": data.get("LOST_MNG_NO"),
-        "transport": lambda x=data.get("CSTD_PLC"), y=data.get("RCPL"): "subway" if x[-1]=="역" else ("bus" if y in busList else ("taxi" if y in taxiList else "etc")),
-        #(위) 보관장소가 역일 경우 지하철, 수령위치가 버스회사일 경우 버스, 택시회사일 경우 택시, 다 아닐 경우 기타 반환
-        "station": lambda x=data.get("CSTD_PLC"): x if x[-1]=="역" else "",
-        "category": data.get("LOST_KND"),
-        "item_name": data.get("LOST_NM"),
-        "status": data.get("LOST_STTS"),
-        "is_received" : lambda x=data.get("LOST_STTS"): True if x=="수령" else False , 
-        #(위) LOST_STTS가 "수령"일 걍우 True를, 아닐 경우 False를 반환한다
-        "registered_at": parse_date_and_make_aware(data.get("REG_YMD")),
-        "received_at": parse_date_and_make_aware(data.get("RCV_YMD")),
-        "description": data.get("LGS_DTL_CN"),
-        "registrar_id": data.get("LOST_RGTR_ID"),
-        "storage_location": lambda x=data.get("RCPL"), y=data.get("CSTD_PLC"): y if y[-1]=="역" else x,
-        #(위) 역일 경우 보관장소 표시, 아닐 경우 수령위치 표시
-        "pickup_company_location": data.get("RCPL"),
-        "views": int(data.get("INQ_CNT") or 0),
-        }
-    )
     
+    return render(request, 'main/home.html', {'report': report})
+
+def trend_analysis(request):
+    """
+    Trend 페이지: 노선/월별/요일별 분실 패턴 시각화 (기획서 항목)
+    """
+    # NOTE: 분석이 완료되면 실제 데이터와 템플릿을 연결해야 합니다.
+    return HttpResponse("<h2>Trend Analysis Page</h2><p>노선별, 요일별 분실 패턴 분석 결과가 표시될 예정입니다.</p>")
+
+def correlation_analysis(request):
+    """
+    Correlation 페이지: 날씨·혼잡도 상관 분석 결과 (기획서 항목)
+    """
+    # NOTE: 분석이 완료되면 실제 데이터와 템플릿을 연결해야 합니다.
+    return HttpResponse("<h2>Correlation Analysis Page</h2><p>날씨·혼잡도 지수와 분실률 간의 상관관계 분석 결과가 표시될 예정입니다.</p>")
+
+def insight_report(request):
+    """
+    Insight 페이지: 결론 및 가설 검증 리포트 (기획서 항목)
+    """
+    # NOTE: 분석이 완료되면 실제 데이터와 템플릿을 연결해야 합니다.
+    # 이 페이지에서 가설 G1~G5의 검증 결과를 최종적으로 요약합니다.
+    return HttpResponse("<h2>Insight Report Page</h2><p>분석 가설(혼잡도, 비 등)에 대한 최종 검증 결과와 결론이 표시될 예정입니다.</p>")

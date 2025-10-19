@@ -1,9 +1,13 @@
+# pickuplog/main/management/commands/sync_lostitem_file.py
+
 import pandas as pd
 from django.core.management.base import BaseCommand
 from django.utils.timezone import make_aware
 from datetime import datetime
 from pathlib import Path
-from main.models import LostItem
+from main.models import LostItem # LostItem 모델 임포트
+
+# --- Helper Functions 및 Mapping (제시된 코드 그대로 유지) ---
 
 # 한글 헤더 -> 영문 표준 헤더 매핑
 COLMAP_KO2EN = {
@@ -18,15 +22,16 @@ COLMAP_KO2EN = {
     "분실물종류": "category",
     "수령위치(회사)": "pickup_company_location",
     "조회수": "views",
+    # (transport, line, station은 CSV에 있다면 자동 매핑되거나 기본값 사용을 위해 여기에 추가하지 않습니다)
 }
 
 def norm_status(v: str) -> str:
     s = ("" if pd.isna(v) else str(v)).strip()
     if s in ("수령", "수령완료", "회수", "claimed", "returned"):
-        return "claimed"
+        # 프로젝트 표준 상태: 수령은 'claimed' 또는 'received'
+        return "claimed" 
     if s in ("폐기", "폐기/기타", "discarded"):
         return "discarded"
-    # CSV에 "보관" 같은 값은 등록 상태로 취급
     return "registered"
 
 def to_aware_dt(v):
@@ -36,7 +41,8 @@ def to_aware_dt(v):
     s = str(v).strip()
     if s in ("", "00:00.0", "0:00:00", "00:00", "0"):
         return None
-    ts = pd.to_datetime(v, errors="coerce")
+    # errors="coerce"로 파싱 실패시 NaT(Not a Time) 반환
+    ts = pd.to_datetime(v, errors="coerce") 
     if pd.isna(ts):
         return None
     if ts.tzinfo is None:
@@ -57,15 +63,17 @@ def read_file_auto(path: Path):
     return pd.read_csv(path, encoding="utf-8", errors="replace")
 
 class Command(BaseCommand):
+    # 커맨드 이름이 'sync_lostitem_file'로 인식됩니다.
     help = "CSV/XLSX에서 분실물 데이터를 불러와 LostItem에 upsert합니다."
 
     def add_arguments(self, parser):
         parser.add_argument("file_path", type=str, help="CSV 또는 XLSX 파일 경로")
 
     def handle(self, *args, **opts):
+        self.stdout.write(self.style.MIGRATE_HEADING("로컬 파일 기반 LostItem 적재 시작"))
         p = Path(opts["file_path"]).expanduser()
         if not p.exists():
-            self.stderr.write(f"파일이 없습니다: {p}")
+            self.stderr.write(self.style.ERROR(f"❌ 파일이 없습니다: {p}"))
             return
 
         df = read_file_auto(p)
@@ -76,7 +84,7 @@ class Command(BaseCommand):
 
         # 필수 컬럼 존재 확인
         if "item_id" not in df.columns:
-            self.stderr.write("❌ 'item_id'(=분실물SEQ) 컬럼을 찾을 수 없습니다. 헤더를 확인하세요.")
+            self.stderr.write(self.style.ERROR("❌ 'item_id'(=분실물SEQ) 컬럼을 찾을 수 없습니다. 헤더를 확인하세요."))
             self.stderr.write(f"현재 컬럼: {list(df.columns)}")
             return
 
@@ -94,9 +102,11 @@ class Command(BaseCommand):
             is_received = bool(recv_at) or status == "claimed"
 
             defaults = {
-                "transport": r.get("transport", "subway"),
+                # transport, line, station은 CSV에 없으면 None/기본값 사용
+                "transport": str(r.get("transport") or "subway"), 
                 "line": (r.get("line") or None),
                 "station": (r.get("station") or None),
+                
                 "category": str(r.get("category") or "기타"),
                 "item_name": str(r.get("item_name") or ""),
                 "status": status,
@@ -120,7 +130,5 @@ class Command(BaseCommand):
                 updated += 1
 
         self.stdout.write(self.style.SUCCESS(
-            f"생성 {created}건 / 업데이트 {updated}건 / 건너뜀 {skipped}건"
+            f"✅ 로컬 파일 적재 완료: 생성 {created}건 / 업데이트 {updated}건 / 건너뜀 {skipped}건"
         ))
-
-

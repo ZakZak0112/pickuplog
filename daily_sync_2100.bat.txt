@@ -1,0 +1,22 @@
+:: daily_sync_2100.bat 파일 내용
+
+:: 1. 가상 환경 활성화 (경로가 다르면 'C:\Users\rhdpr\Documents\GitHub\pickuplog' 부분을 수정하세요)
+call C:\Users\rhdpr\Documents\GitHub\pickuplog\venv\Scripts\activate.bat
+
+:: 2. Django 프로젝트 디렉토리로 이동 (manage.py가 있는 위치로 이동)
+cd C:\Users\rhdpr\Documents\GitHub\pickuplog
+
+:: 3. 데이터 동기화 명령 실행 (순서: 승하차 -> 분실물 -> 분석)
+echo [%DATE% %TIME%] [1/3] Ridership Daily Sync...
+python manage.py sync_ridership
+
+echo [%DATE% %TIME%] [2/3] LostItem API Sync...
+python manage.py sync_lostitem
+
+echo [%DATE% %TIME%] [3/3] Rain Impact Report Sync...
+python manage.py sync_reports
+
+:: 실행 완료 후 가상 환경 비활성화
+deactivate
+
+echo [%DATE% %TIME%] All sync and report tasks completed.

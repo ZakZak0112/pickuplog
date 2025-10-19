@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>PickUpLog: 오늘의 분실 예보</title>
+    <style>
+        /* 분석 리포트의 가독성을 위한 임시 스타일 */
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f4; }
+        .report-box { 
+            background-color: white; 
+            border: 1px solid #ddd; 
+            padding: 25px; 
+            border-radius: 10px; 
+            max-width: 450px; 
+            margin: 20px auto; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .header h2 { margin-top: 0; color: #1e88e5; }
+        .list-item { 
+            font-size: 1.2em; 
+            padding: 8px 0; 
+            border-bottom: 1px dotted #eee;
+        }
+        .list-item:last-child { border-bottom: none; }
+        .warning { 
+            color: #d32f2f; 
+            font-weight: bold; 
+            margin-top: 30px; 
+            padding: 15px; 
+            background-color: #ffebee;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="report-box">
+        
+        <form method="GET" action="/">
+            <h3>분실 예보 조건 설정</h3>
+            <label for="line" style="font-weight: bold;">노선:</label>
+            <select name="line" id="line">
+                <option value="LINE2" {% if report.line == 'LINE2' %}selected{% endif %}>2호선</option>
+                <option value="LINE1" {% if report.line == 'LINE1' %}selected{% endif %}>1호선</option>
+                <option value="LINE3" {% if report.line == 'LINE3' %}selected{% endif %}>3호선</option>
+            </select>
+            
+            <label for="condition" style="font-weight: bold; margin-left: 20px;">날씨:</label>
+            <select name="condition" id="condition">
+                <option value="평소" {% if report.date_condition == '평소' %}selected{% endif %}>평소</option>
+                <option value="비오는 날" {% if report.date_condition == '비오는 날' %}selected{% endif %}>비오는 날</option>
+            </select>
+            <button type="submit" style="padding: 5px 10px; margin-left: 10px;">예보 확인</button>
+        </form>
+
+        <hr>
+        
+        <div class="header">
+            <h2>🚇 오늘의 분실 예보</h2>
+            <p><strong>{{ report.line|default:"노선 미선택" }}</strong> (조건: {{ report.date_condition|default:"평소" }})</p>
+            <small>분석 기준 데이터: {{ report.latest_date|date:"Y년 m월 d일" }}</small>
+        </div>
+        
+        <h3>예상 분실물 TOP 3 비율</h3>
+        
+        {% for item in report.items %}
+            <div class="list-item">
+                <span style="font-weight: bold;">{{ forloop.counter }}. {{ item.category|default:"N/A" }}</span>
+                <span style="float: right; color: #1e88e5;">{{ item.rate|floatformat:1 }}%</span>
+            </div>
+        {% empty %}
+            <p>데이터 분석 오류 또는 부족으로 예보를 제공할 수 없습니다.</p>
+        {% endfor %}
+
+        <div class="warning">
+            📢 {{ report.warning|default:"안전한 하루 보내세요!" }}
+        </div>
+    </div>
+
+</body>
+</html>

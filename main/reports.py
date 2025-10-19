@@ -1,4 +1,3 @@
-# pickuplog/main/reports.py
 
 from django.db.models import Avg
 import random
