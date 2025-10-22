@@ -23,12 +23,33 @@
         .alert-info { background-color: var(--pico-background-primary); color: var(--pico-text-primary); border-color: var(--pico-border-primary); }
         .messages { padding: 0; }
         .messages li { list-style: none; padding: 1rem; margin-bottom: 1rem; border-radius: var(--pico-border-radius); }
+
+        /* 💡 추가된 스타일: 네비게이션을 위한 기본 여백 */
+        nav ul {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
     <main role="main" class="container">
-        <h1 style="margin-top:1rem"><a href="{% url 'lostitem_list' %}">PickupLog</a></h1>
+        <h1 style="margin-top:1rem"><a href="{% url 'home' %}">PickupLog</a></h1>
+        
+        <nav>
+            <ul>
+                <li><a href="{% url 'home' %}">오늘의 예보 (Home)</a></li>
+                <li><a href="{% url 'lostitem_list' %}">분실물 아카이브</a></li>
+                <li><a href="{% url 'trend' %}">Trend: 분실 패턴</a></li>
+                <li><a href="{% url 'correlation' %}">Correlation: 상관 분석</a></li>
+                <li><a href="{% url 'insight' %}">Insight: 결론</a></li>
+                <li><a href="/admin/">데이터 관리 (Admin)</a></li>
+            </ul>
+        </nav>
+        <hr>
         
         {% if messages %}
             <ul class="messages">

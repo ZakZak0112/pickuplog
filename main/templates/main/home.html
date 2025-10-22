@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -5,30 +6,41 @@
     <title>PickUpLog: 오늘의 분실 예보</title>
     <style>
         /* 분석 리포트의 가독성을 위한 임시 스타일 */
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f4; }
+        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', Arial, sans-serif; margin: 40px; background-color: #f4f4f4; }
         .report-box { 
             background-color: white; 
             border: 1px solid #ddd; 
             padding: 25px; 
             border-radius: 10px; 
-            max-width: 450px; 
+            max-width: 550px; /* 너비 확장 */
             margin: 20px auto; 
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 그림자 강화 */
+            display: grid;
+            gap: 20px;
         }
-        .header h2 { margin-top: 0; color: #1e88e5; }
+        .header h2 { margin-top: 0; color: #1e88e5; font-size: 2em; }
+        .prediction-value { font-size: 2.5em; font-weight: bold; color: #d32f2f; } /* 분실률 강조 */
+        
         .list-item { 
-            font-size: 1.2em; 
+            font-size: 1.1em; 
             padding: 8px 0; 
             border-bottom: 1px dotted #eee;
         }
         .list-item:last-child { border-bottom: none; }
-        .warning { 
+        
+        .warning-box { 
             color: #d32f2f; 
             font-weight: bold; 
-            margin-top: 30px; 
+            margin-top: 20px; 
             padding: 15px; 
             background-color: #ffebee;
             border-radius: 6px;
+            border-left: 5px solid #d32f2f;
+        }
+        .rii-detail { 
+            margin-top: 20px; 
+            padding-top: 15px; 
+            border-top: 1px solid #eee;
         }
     </style>
 </head>
@@ -40,41 +52,83 @@
             <h3>분실 예보 조건 설정</h3>
             <label for="line" style="font-weight: bold;">노선:</label>
             <select name="line" id="line">
-                <option value="LINE2" {% if report.line == 'LINE2' %}selected{% endif %}>2호선</option>
-                <option value="LINE1" {% if report.line == 'LINE1' %}selected{% endif %}>1호선</option>
-                <option value="LINE3" {% if report.line == 'LINE3' %}selected{% endif %}>3호선</option>
+                <option value="LINE2" {% if line == 'LINE2' %}selected{% endif %}>2호선</option>
+                <option value="LINE1" {% if line == 'LINE1' %}selected{% endif %}>1호선</option>
+                <option value="LINE3" {% if line == 'LINE3' %}selected{% endif %}>3호선</option>
             </select>
             
             <label for="condition" style="font-weight: bold; margin-left: 20px;">날씨:</label>
             <select name="condition" id="condition">
-                <option value="평소" {% if report.date_condition == '평소' %}selected{% endif %}>평소</option>
-                <option value="비오는 날" {% if report.date_condition == '비오는 날' %}selected{% endif %}>비오는 날</option>
+                <option value="평소" {% if date_condition == '평소' %}selected{% endif %}>평소</option>
+                <option value="비오는 날" {% if date_condition == '비오는 날' %}selected{% endif %}>비오는 날</option>
             </select>
-            <button type="submit" style="padding: 5px 10px; margin-left: 10px;">예보 확인</button>
+            <button type="submit" style="padding: 5px 10px; margin-left: 10px; background-color: #1e88e5; color: white; border: none; border-radius: 4px;">예보 확인</button>
         </form>
 
         <hr>
         
         <div class="header">
             <h2>🚇 오늘의 분실 예보</h2>
-            <p><strong>{{ report.line|default:"노선 미선택" }}</strong> (조건: {{ report.date_condition|default:"평소" }})</p>
-            <small>분석 기준 데이터: {{ report.latest_date|date:"Y년 m월 d일" }}</small>
+            <p><strong>{{ line|default:"노선 미선택" }}</strong> (조건: {{ date_condition|default:"평소" }})</p>
+            <small>분석 기준 데이터: {{ current_date|date:"Y년 m월 d일" }}</small>
         </div>
         
-        <h3>예상 분실물 TOP 3 비율</h3>
-        
-        {% for item in report.items %}
-            <div class="list-item">
-                <span style="font-weight: bold;">{{ forloop.counter }}. {{ item.category|default:"N/A" }}</span>
-                <span style="float: right; color: #1e88e5;">{{ item.rate|floatformat:1 }}%</span>
+        <div>
+            <h3>예상 분실률 (Loss Rate per 10k)</h3>
+            <div class="prediction-value">
+                {{ total_predicted_loss|floatformat:2|default:"N.A" }}건
             </div>
-        {% empty %}
-            <p>데이터 분석 오류 또는 부족으로 예보를 제공할 수 없습니다.</p>
-        {% endfor %}
-
-        <div class="warning">
-            📢 {{ report.warning|default:"안전한 하루 보내세요!" }}
+            <p style="margin-top: 5px; color: #555;">
+                1만 명 승하차 당 예상 분실물 수치입니다. (RII 및 혼잡도 가중치 반영)
+            </p>
         </div>
+
+        <div class="warning-box">
+            📢 **집중 예보: 우산 분실 위험 {{ umbrella_impact_ratio|floatformat:1 }}배 증가.**
+            <p style="font-size: 0.9em; margin-top: 5px; color: #880000;">
+                RII(Rain Impact Index) 분석에 따라, 비 오는 날에는 우산 및 습기 관련 물품의 분실률이
+                <span style="font-weight: 900;">{{ umbrella_impact_ratio|floatformat:1 }}배</span>까지 증가하는 것으로 집계됩니다.
+            </p>
+        </div>
+
+        <div>
+            <h3>주요 분실 카테고리 기여율</h3>
+            <div style="border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
+                {% for item in items %}
+                    <div class="list-item">
+                        <span style="font-weight: bold;">{{ forloop.counter }}. {{ item.category|default:"N/A" }}</span>
+                        <span style="float: right; color: #1e88e5;">{{ item.rate|floatformat:1 }}%</span>
+                    </div>
+                {% empty %}
+                    <p>데이터 부족으로 카테고리 기여율을 제공할 수 없습니다.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="rii-detail">
+            <h4>노선별 RII 상세</h4>
+            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                <thead style="background-color: #eee;">
+                    <tr>
+                        <th style="padding: 8px; border: 1px solid #ddd;">노선</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">RII</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in latest_reports %}
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #ddd;">{{ report.line_code }}호선</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">{{ report.rain_impact_index|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="2" style="padding: 8px; border: 1px solid #ddd; text-align: center; color: #777;">분석 보고서 데이터가 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
     </div>
 
 </body>
