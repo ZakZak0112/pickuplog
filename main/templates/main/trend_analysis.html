@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+
+    <!-- 🔹 페이지 헤더 -->
+    <h2 class="text-center mb-4">노선별 · 요일별 분실 패턴 분석</h2>
+    <p class="text-center text-muted">
+        아래는 비 영향 지수(RII)와 분실물 데이터를 기반으로 한 트렌드 분석 결과입니다.
+    </p>
+
+    <!-- 🔹 주요 통계 카드 -->
+    <div class="row text-center mb-4">
+        <div class="col-md-6">
+            <div class="card p-3 shadow-sm">
+                <h5>분석 대상 역 수</h5>
+                <p class="fs-3">{{ total_stations }}</p>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card p-3 shadow-sm">
+                <h5>평균 비 영향 지수 (RII)</h5>
+                <p class="fs-3">{{ avg_rii|floatformat:2 }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🔹 RII 차트 -->
+    <div class="mb-5">
+        <canvas id="riiChart"></canvas>
+    </div>
+
+</div>
+
+<!-- 🔹 Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById('riiChart').getContext('2d');
+const riiChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: {{ chart_labels|safe }},
+        datasets: [{
+            label: '평균 비 영향 지수 (RII)',
+            data: {{ chart_values|safe }},
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: 'RII'
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: '노선 코드'
+                }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}
