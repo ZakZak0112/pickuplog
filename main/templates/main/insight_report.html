@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+  <h2>📘 종합 인사이트 리포트 (Insight Report)</h2>
+  <p class="text-muted">분석 가설(비, 혼잡도 등)에 대한 결과와 결론 요약입니다.</p>
+
+  <div class="alert alert-info mt-4">
+    <strong>요약 결론:</strong> {{ summary }}
+  </div>
+
+  <div class="row mt-4">
+    <div class="col-md-6">
+      <h5>☔ 노선별 평균 비 영향 지수 (RII)</h5>
+      <table class="table table-bordered">
+        <thead><tr><th>노선</th><th>평균 RII</th></tr></thead>
+        <tbody>
+        {% for r in avg_rii %}
+          <tr>
+            <td>{{ r.line_code }}</td>
+            <td>{{ r.avg_index|floatformat:2 }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="2">데이터가 없습니다.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col-md-6">
+      <h5>🎒 분실물 발생 상위 노선 TOP 5</h5>
+      <table class="table table-striped">
+        <thead><tr><th>노선</th><th>분실물 수</th></tr></thead>
+        <tbody>
+        {% for l in lost_top %}
+          <tr>
+            <td>{{ l.line }}</td>
+            <td>{{ l.total_lost }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="2">데이터가 없습니다.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

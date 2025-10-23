@@ -273,6 +273,7 @@ def lostitem_list(request):
         'page_obj': page_obj,
         'url_query_string': url_query_string,
         'total_count': queryset.count(),
+        'items': queryset,
     }
     
     return render(request, 'main/lostitem_list.html', context)
@@ -281,12 +282,120 @@ def lostitem_list(request):
 # ----------------------------------------------------------------------
 # 4. 분석 결과 뷰 (trend, correlation, insight)
 # ----------------------------------------------------------------------
+from django.db.models.functions import ExtractWeekDay
 
 def trend_analysis(request):
-    return HttpResponse("<h2>Trend Analysis Page</h2><p>노선별, 요일별 분실 패턴 분석 결과가 표시될 예정입니다.</p>")
+    """
+    노선별 · 역별 · 요일별 분실 패턴 분석
+    """
+    # --------------------------------------------------
+    # 1️⃣ Trend 데이터 (LostItem 집계)
+    # 최근 90일 데이터만 사용
+    queryset = LostItem.objects.filter()
 
+    trend_data = (
+        queryset
+        .annotate(weekday=ExtractWeekDay('registered_at'))  # 1=일요일, 2=월요일 ...
+        .values('line', 'station', 'weekday')
+        .annotate(count=Count('id'))
+        .order_by('line', 'station', 'weekday')
+    )
+
+    reports = RainImpactReport.objects.all()
+    line_stats = (
+        reports.values('line_code')
+        .annotate(avg_rii=Avg('rain_impact_index'))
+        .order_by('line_code')
+    )
+
+    context = {
+        'reports': reports,
+        'chart_labels': [stat['line_code'] for stat in line_stats],
+        'chart_values': [round(stat['avg_rii'], 2) for stat in line_stats],
+        'total_stations': reports.count(),
+        'avg_rii': reports.aggregate(Avg('rain_impact_index'))['rain_impact_index__avg'] or 0,
+    }
+
+    return render(request, 'main/trend_analysis.html', context)
 def correlation_analysis(request):
-    return HttpResponse("<h2>Correlation Analysis Page</h2><p>날씨·혼잡도 지수와 분실률 간의 상관관계 분석 결과가 표시될 예정입니다.</p>")
+    today = timezone.now().date()
+    start_date = today - timedelta(days=30)
+    
+    # 최근 30일 기온, 강수, 분실물 개수 집계
+    weather_data = WeatherDaily.objects.filter()
+    lost_data = (
+        LostItem.objects
+        .filter()
+        .extra(select={'date': "date(registered_at)"})
+        .values('date')
+        .annotate(lost_count=Count('id'))
+    )
+
+    # 날짜별 매칭
+    merged = []
+    for w in weather_data:
+        lost_count = next((x['lost_count'] for x in lost_data if str(x['date']) == str(w.date)), 0)
+        merged.append({
+            'date': w.date.strftime("%Y-%m-%d"),  # JS에서 문자열로 사용
+            'temp': w.avg_temp,
+            'rain': w.rain_mm,
+            'lost': lost_count,
+        })
+
+    # 상관계수 계산
+    def correlation(xs, ys):
+        if not xs or not ys or len(xs) != len(ys):
+            return 0
+        mean_x = sum(xs)/len(xs)
+        mean_y = sum(ys)/len(ys)
+        num = sum((x-mean_x)*(y-mean_y) for x, y in zip(xs, ys))
+        den = (sum((x-mean_x)**2 for x in xs) * sum((y-mean_y)**2 for y in ys)) ** 0.5
+        return round(num/den, 3) if den else 0
+
+    temp_corr = correlation([m['temp'] for m in merged if m['temp'] is not None], [m['lost'] for m in merged])
+    rain_corr = correlation([m['rain'] for m in merged if m['rain'] is not None], [m['lost'] for m in merged])
+
+    context = {
+        'merged': merged,
+        'temp_corr': temp_corr,
+        'rain_corr': rain_corr,
+        'has_data': bool(merged),
+    }
+
+    return render(request, 'main/correlation_analysis.html', context)
 
 def insight_report(request):
-    return HttpResponse("<h2>Insight Report Page</h2><p>분석 가설(혼잡도, 비 등)에 대한 최종 검증 결과와 결론이 표시될 예정입니다.</p>")
+    # 노선별 평균 RII
+    avg_rii = (
+        RainImpactReport.objects
+        .values('line_code')
+        .annotate(avg_index=Avg('rain_impact_index'))
+        .order_by('-avg_index')
+    )
+
+    # 분실물 상위 노선 TOP 5
+    lost_top = (
+        LostItem.objects
+        .values('line')
+        .annotate(total_lost=Count('id'))
+        .order_by('-total_lost')[:5]
+    )
+
+    # 간단한 요약 문 생성
+    summary = ""
+    if avg_rii:
+        top_line = avg_rii[0]['line_code']
+        top_value = round(avg_rii[0]['avg_index'], 2)
+        summary += f"비의 영향을 가장 많이 받은 노선은 {top_line}이며, 평균 RII는 {top_value}입니다. "
+    if lost_top:
+        summary += f"가장 분실물이 많은 노선은 {lost_top[0]['line']}입니다. "
+    if not summary:
+        summary = "데이터가 부족하여 인사이트를 생성할 수 없습니다."
+
+    context = {
+        'avg_rii': avg_rii,
+        'lost_top': lost_top,
+        'summary': summary,
+    }
+
+    return render(request, 'main/insight_report.html', context)

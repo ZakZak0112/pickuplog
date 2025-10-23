@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-3">🌦 상관관계 분석 (Correlation Analysis)</h2>
+  <p class="text-muted">최근 30일간 날씨, 기온, 혼잡도와 분실률 간의 상관관계를 분석합니다.</p>
+
+  {% if merged %}
+  <div class="card p-3 mb-4">
+    <h5>📈 상관계수 결과</h5>
+    <table class="table table-striped">
+      <thead><tr><th>지표</th><th>상관계수 (r)</th></tr></thead>
+      <tbody>
+        <tr><td>평균 기온 ↔ 분실률</td><td>{{ temp_corr }}</td></tr>
+        <tr><td>강수량 ↔ 분실률</td><td>{{ rain_corr }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6">
+      <canvas id="tempChart"></canvas>
+    </div>
+    <div class="col-md-6">
+      <canvas id="rainChart"></canvas>
+    </div>
+  </div>
+
+  <!-- JSON 안전하게 심기 -->
+  {{ merged|json_script:"merged-data" }}
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const merged = JSON.parse(document.getElementById('merged-data').textContent);
+
+    const labels = merged.map(m => m.date);
+    const lost = merged.map(m => m.lost);
+
+    new Chart(document.getElementById('tempChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '평균 기온 (°C)',
+          data: merged.map(m => m.temp),
+          borderColor: 'rgba(255,99,132,1)',
+          yAxisID: 'y1'
+        },{
+          label: '분실물 수',
+          data: lost,
+          borderColor: 'rgba(54,162,235,1)',
+          yAxisID: 'y2'
+        }]
+      },
+      options: {
+        plugins: { title: { display: true, text: '기온 vs 분실물 추세' } },
+        scales: { y1: { type: 'linear', position: 'left' }, y2: { type: 'linear', position: 'right' } }
+      }
+    });
+
+    new Chart(document.getElementById('rainChart'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '강수량 (mm)',
+          data: merged.map(m => m.rain),
+          borderColor: 'rgba(75,192,192,1)',
+          yAxisID: 'y1'
+        },{
+          label: '분실물 수',
+          data: lost,
+          borderColor: 'rgba(255,159,64,1)',
+          yAxisID: 'y2'
+        }]
+      },
+      options: {
+        plugins: { title: { display: true, text: '강수량 vs 분실물 추세' } },
+        scales: { y1: { type: 'linear', position: 'left' }, y2: { type: 'linear', position: 'right' } }
+      }
+    });
+  </script>
+
+  {% else %}
+  <p class="text-center mt-5">🔍 분석 가능한 데이터가 없습니다.</p>
+  {% endif %}
+</div>
+{% endblock %}
