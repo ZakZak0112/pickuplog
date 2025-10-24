@@ -135,20 +135,113 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('데이터 적재 및 정제가 완료되었습니다.'))
 
 
-    # 3. 데이터 적재 함수 (로직 구현 필요)
-    # NOTE: 이 함수들은 이전과 동일하게 rows 리스트를 받아 처리해야 합니다.
-    # 이 단계에서는 로직 구현 없이 성공 가정하고 진행합니다.
-
     @transaction.atomic
     def _sync_station_dict(self, rows):
-        """StationDict를 먼저 채워서 역 표준화 정보를 확보합니다. (JSON rows 처리)"""
-        # 실제 로직 구현 필요
-        self.stdout.write(self.style.MIGRATE_HEADING('1/2단계: StationDict 적재 (로직 구현 필요)'))
-        pass
+        """StationDict를 먼저 채워서 역 표준화 정보를 확보합니다."""
+        self.stdout.write(self.style.MIGRATE_HEADING('1/2단계: StationDict 적재 시작'))
+
+        added, skipped = 0, 0
+
+        # rows가 단일 dict이면 리스트화
+        if isinstance(rows, dict):
+            rows = [rows]
+
+        for row in rows:
+            raw_name = row.get('SBWY_STNS_NM')
+            line_name = row.get('SBWY_ROUT_LN_NM')
+
+
+            # ⚠️ None 값 방지 및 로그
+            if not raw_name or not line_name:
+                skipped += 1
+                self.stdout.write(self.style.WARNING(f'⚠️ 누락 데이터 스킵: {row}'))
+                continue
+
+            try:
+                std_name = normalize_station_name(raw_name)
+                line_code = normalize_line_code(line_name)
+
+                # 중복 방지
+                obj, created = StationDict.objects.get_or_create(
+                    station_name_raw=raw_name,
+                    line_code=line_code,
+                    defaults={
+                        'station_name_std': std_name,
+                        'is_transfer': False,
+                    },
+                )
+
+                if created:
+                    added += 1
+
+            except Exception as e:
+                skipped += 1
+                self.stdout.write(self.style.WARNING(f'⚠️ 데이터 정제 오류: {raw_name}, {e}'))
+                continue
+
+        # 환승역 처리
+        for std_name in StationDict.objects.values_list('station_name_std', flat=True).distinct():
+            lines = StationDict.objects.filter(station_name_std=std_name)
+            if lines.count() > 1:
+                lines.update(is_transfer=True)
+
+        self.stdout.write(self.style.SUCCESS(f'✅ StationDict 적재 완료: {added}개 추가, {skipped}개 건너뜀'))
+
+
 
     @transaction.atomic
     def _sync_ridership_data(self, rows):
-        """RidershipDaily 테이블에 일별 승하차 인원 데이터를 적재합니다. (JSON rows 처리)"""
-        # 실제 로직 구현 필요
-        self.stdout.write(self.style.MIGRATE_HEADING('2/2단계: RidershipDaily 적재 (로직 구현 필요)'))
-        pass
+        """RidershipDaily 테이블에 일별 승하차 인원 데이터를 적재합니다."""
+        self.stdout.write(self.style.MIGRATE_HEADING('2/2단계: RidershipDaily 적재 시작'))
+
+        added, skipped = 0, 0
+
+        for row in rows:
+            raw_name = row.get('SBWY_STNS_NM')
+            line_name = row.get('SBWY_ROUT_LN_NM')
+            ride_date = row.get('USE_YMD')
+            on_count = row.get('GTON_TNOPE')
+            off_count = row.get('GTOFF_TNOPE')
+
+            if not (raw_name and line_name and ride_date):
+                skipped += 1
+                continue
+
+            try:
+                # StationDict에서 표준 역명 확인
+                line_code = normalize_line_code(line_name)
+                station_std = StationDict.objects.filter(
+                    station_name_raw=raw_name,
+                    line_code=line_code
+                ).values_list('station_name_std', flat=True).first()
+
+                if not station_std:
+                    self.stdout.write(self.style.WARNING(f'⚠️ StationDict 미존재 스킵: {raw_name}, {line_name}'))
+                    skipped += 1
+                    continue
+
+                date_obj = datetime.strptime(ride_date, '%Y%m%d').date()
+                boardings = int(on_count) if on_count else 0
+                alightings = int(off_count) if off_count else 0
+                total = boardings + alightings
+
+                obj, created = RidershipDaily.objects.update_or_create(
+                    date=date_obj,
+                    line_code=line_code,
+                    station_name_std=station_std,
+                    defaults={
+                        'boardings': boardings,
+                        'alightings': alightings,
+                        'total': total
+                    },
+                )
+
+                if created:
+                    added += 1
+
+            except Exception as e:
+                self.stdout.write(self.style.WARNING(f'⚠️ 적재 오류: {raw_name} ({ride_date}) - {e}'))
+                skipped += 1
+                continue
+
+        self.stdout.write(self.style.SUCCESS(f'✅ RidershipDaily 적재 완료: {added}개 추가, {skipped}개 건너뜀'))
