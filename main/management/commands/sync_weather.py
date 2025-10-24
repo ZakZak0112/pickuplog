@@ -2,6 +2,7 @@ import pandas as pd
 import requests_cache
 from retry_requests import retry
 import openmeteo_requests
+from datetime import datetime
 
 from django.core.management.base import BaseCommand
 from main.models import WeatherDaily
@@ -32,34 +33,64 @@ class Command(BaseCommand):
 
         # Daily 데이터 처리
         daily = response.Daily()
-        dates = pd.to_datetime(daily.Time(), unit="s")  # pandas Timestamp
+        
+        # 데이터 추출
         temp_max = daily.Variables(1).ValuesAsNumpy()
         temp_min = daily.Variables(2).ValuesAsNumpy()
         rain_sum = daily.Variables(3).ValuesAsNumpy()
+        
+        # 실제 데이터 길이 확인
+        num_days = len(temp_max)
+        start_timestamp = daily.Time()
+        
+        self.stdout.write(f"Start timestamp: {start_timestamp}")
+        self.stdout.write(f"Start date: {datetime.fromtimestamp(start_timestamp)}")
+        self.stdout.write(f"Number of data points: {num_days}")
+        self.stdout.write(f"temp_max length: {len(temp_max)}")
+        self.stdout.write(f"temp_min length: {len(temp_min)}")
+        self.stdout.write(f"rain_sum length: {len(rain_sum)}")
+        
+        # 날짜 범위 생성
+        dates = pd.date_range(
+            start=pd.Timestamp(start_timestamp, unit="s"),
+            periods=num_days,
+            freq="D"
+        )
+        
+        self.stdout.write(f"\nFirst 5 dates:")
+        for d in dates[:5]:
+            self.stdout.write(f"  {d.date()}")
 
         # DataFrame 생성
         df = pd.DataFrame({
-            "date": dates,
+            "date": [d.date() for d in dates],
             "avg_temp": (temp_max + temp_min) / 2,
             "rain_mm": rain_sum
         })
+        
         # 결측치 처리
         df["rain_mm"] = df["rain_mm"].fillna(0)
         df["is_rainy"] = df["rain_mm"] > 0
 
-        # 날짜 타입 변환 (Django DateField 호환)
-        df["date"] = df["date"].dt.date
-
         # DB 저장
+        created_count = 0
+        updated_count = 0
+        
         for _, row in df.iterrows():
-            WeatherDaily.objects.update_or_create(
+            weather_obj, created = WeatherDaily.objects.update_or_create(
                 date=row["date"],
                 city_code="SEOUL",
                 defaults={
-                    "avg_temp": row["avg_temp"],
-                    "rain_mm": row["rain_mm"],
-                    "is_rainy": row["is_rainy"]
+                    "avg_temp": float(row["avg_temp"]),
+                    "rain_mm": float(row["rain_mm"]),
+                    "is_rainy": bool(row["is_rainy"])
                 }
             )
+            if created:
+                created_count += 1
+                self.stdout.write(f"✓ Created: {weather_obj.date}")
+            else:
+                updated_count += 1
 
-        self.stdout.write(self.style.SUCCESS(f"Successfully synced {len(df)} days of weather data for Seoul"))
+        self.stdout.write(self.style.SUCCESS(f"\nSuccessfully synced {len(df)} days of weather data for Seoul"))
+        self.stdout.write(self.style.SUCCESS(f"Created: {created_count}, Updated: {updated_count}"))

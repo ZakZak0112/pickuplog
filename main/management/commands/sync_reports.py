@@ -1,6 +1,6 @@
 # pickuplog/main/management/commands/sync_reports.py (최종 수정)
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 # 💡 수정: calculate_rain_impact_index 함수 임포트를 제거합니다.
 # from main.reports import calculate_rain_impact_index 
 
@@ -13,6 +13,7 @@ class Command(BaseCommand):
     
     help = 'Calculates RII and generates the RainImpactReport.'
 
+    
     def handle(self, *args, **options):
         # 💡 수정: 함수 호출 시점에 모듈을 로드합니다.
         # 이렇게 하면 Django가 settings 및 URL을 로드하는 과정에서 reports.py를 강제로 로드하지 않습니다.

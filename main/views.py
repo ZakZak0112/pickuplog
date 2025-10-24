@@ -2,31 +2,30 @@ from django.db.models import Q, Count, Sum, Avg
 from django.core.paginator import Paginator, EmptyPage
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils import timezone 
+from datetime import datetime, timedelta
 from django.conf import settings 
 from django.contrib import messages 
 from django.db import IntegrityError 
 from django.http import HttpResponse
-from datetime import datetime, timedelta
-from django.shortcuts import render
+from django.db.models.functions import ExtractWeekDay # Trend 분석용
 
-# 프로젝트 모델 임포트
+# 프로젝트 모델 및 폼 임포트
 from .models import LostItem, RidershipDaily, RainImpactReport, WeatherDaily 
-# .forms 임포트는 제거 (최종 코드 제공을 위해)
 from .forms import LostItemSearchForm, LostItemForm, LostItemCsvUploadForm 
 
 import csv
 from io import TextIOWrapper 
 
+
 # ----------------------------------------------------------------------
-# Helper Functions (도우미 함수) - (유지)
+# Helper Functions (도우미 함수)
 # ----------------------------------------------------------------------
 def parse_date_and_make_aware(date_str):
+    # ... (날짜 파싱 로직 유지)
     if not date_str or date_str.strip() in ['00:00.0', '']:
         return None
-    
     date_part = date_str.strip().split(' ')[0]
     date_part = date_part.replace('/', '-')
-    
     try:
         naive_datetime = datetime.strptime(date_part, '%Y-%m-%d').replace(hour=0, minute=0, second=0)
         return timezone.make_aware(
@@ -38,11 +37,11 @@ def parse_date_and_make_aware(date_str):
 
 
 # ----------------------------------------------------------------------
-# 1. LostItem CRUD Views (순환 참조 방지를 위해 상단으로 이동)
+# 1. LostItem CRUD Views (순환 참조 방지를 위해 최상단으로 이동)
 # ----------------------------------------------------------------------
 
-# 분실물 생성 (LostItemForm 사용)
 def lostitem_create(request):
+    """분실물 생성"""
     if request.method == "POST":
         form = LostItemForm(request.POST)
         if form.is_valid():
@@ -53,8 +52,8 @@ def lostitem_create(request):
         form = LostItemForm()
     return render(request, "main/lostitem_form.html", {"form": form})
 
-# 분실물 수정 (LostItemForm 사용)
 def lostitem_update(request, pk):
+    """분실물 수정"""
     obj = get_object_or_404(LostItem, pk=pk)
     if request.method == "POST":
         form = LostItemForm(request.POST, instance=obj)
@@ -66,9 +65,8 @@ def lostitem_update(request, pk):
         form = LostItemForm(instance=obj)
     return render(request, "main/lostitem_form.html", {"form": form, "object": obj})
 
-
-# CSV 파일 업로드 및 처리 (스트림 방식)
 def lostitem_upload_csv(request):
+    """CSV 파일 업로드 및 처리"""
     if request.method == 'POST':
         form = LostItemCsvUploadForm(request.POST, request.FILES)
         if form.is_valid():
@@ -76,33 +74,32 @@ def lostitem_upload_csv(request):
             
             if not csv_file.name.endswith('.csv'):
                 messages.error(request, 'CSV 파일만 업로드할 수 있습니다.')
-                return redirect('lostitem_list') 
+                return redirect('lostitem_list')
             
             success_count = 0
             fail_count = 0
             
             try:
-                # 1. 파일 스트림 열기 (인코딩 우선순위)
+                # 파일 스트림 처리 로직 (기존 로직 유지)
                 try:
                     csv_file_wrapper = TextIOWrapper(csv_file, encoding='utf-8', newline='', errors='replace') 
                 except Exception:
                     csv_file_wrapper = TextIOWrapper(csv_file, encoding='cp949', newline='', errors='replace')
                 
                 reader = csv.reader(csv_file_wrapper)
-                next(reader) # 헤더(첫 번째 줄) 건너뛰기
+                next(reader) 
                 
-                # 2. 데이터 처리 루프
                 for row in reader:
-                    
                     if not row or len(row) < 11: 
                         fail_count += 1
-                        continue # 빈 줄 또는 부족한 열 건너뛰기
+                        continue 
                     
                     try:
                         registered_dt = parse_date_and_make_aware(row[2])
                         received_dt = parse_date_and_make_aware(row[3])
                         
                         LostItem.objects.create(
+                            # ... (DB 필드 매핑 로직 유지)
                             item_id=row[0], 
                             status=row[1], 
                             registered_at=registered_dt, 
@@ -117,7 +114,6 @@ def lostitem_upload_csv(request):
                             is_received=(row[1].strip() == '수령')
                         )
                         success_count += 1
-                        
                     except IntegrityError:
                         fail_count += 1
                     except Exception:
@@ -138,61 +134,83 @@ def lostitem_upload_csv(request):
         
     return render(request, 'main/lostitem_csv_upload.html', {'form': form})
 
-
 # ----------------------------------------------------------------------
-# 2. PickUpLog 핵심 뷰: 오늘의 분실 예보 (home) - ★ 최종 수정된 뷰
+# 2. PickUpLog 핵심 뷰: 오늘의 분실 예보 (home)
 # ----------------------------------------------------------------------
 def home(request):
     """
     PickUpLog 홈 화면 뷰: 오늘의 분실 예보 및 RII 기반 인사이트를 제공합니다.
     """
-    # 1. 사용자 입력 및 기본 설정
+    # ... (home 함수 로직 유지)
     line_input = request.GET.get('line', 'LINE2') 
     is_rainy_today = (request.GET.get('condition', '평소') == '비오는 날')
     
-    # 2. RII 데이터 조회 및 평균 계산
-    try:
-        # DB에서 RII 평균을 계산 (reports.py에서 생성된 가상 데이터를 기반으로)
-        avg_rii = RainImpactReport.objects.aggregate(avg_rii=Avg('rain_impact_index'))['avg_rii']
-    except Exception:
-        # 데이터가 없거나 모델 정의 오류 시 기본값 설정
-        avg_rii = 2.0 
+    latest_date = RidershipDaily.objects.order_by('-date').values_list('date', flat=True).first()
     
-    # 3. 핵심 예측 값 설정
+    avg_ridership = RidershipDaily.objects.filter(
+        line_code=line_input,
+        date__gte=timezone.now().date() - timezone.timedelta(days=90)
+    ).aggregate(avg_total=Avg('total'))['avg_total'] or 1.0
     
-    # ★ 요청하신 2.3배로 고정 설정
-    umbrella_impact_ratio = 2.3 
+    top_categories_qs = LostItem.objects.filter(
+        line=line_input,
+        registered_at__isnull=False,
+        registered_at__date__gte=timezone.now().date() - timezone.timedelta(days=90)
+    ).values('category').annotate(
+        raw_count=Count('category')
+    ).order_by('-raw_count')[:5]
     
-    # RII와 기본값(1.83)을 기반으로 오늘의 총 예상 분실률 계산 (가상 로직)
-    # RII가 높을수록 예측률 증가 (예: 1.83 + 0.1 * RII)
-    base_rate = 1.83
-    if avg_rii:
-        total_predicted_loss = base_rate + (avg_rii / 10)
+    report_items = []
+    special_warning = "분실물 발생 위험은 평소 수준입니다."
+    
+    for item in top_categories_qs:
+        category = item['category']
+        raw_count = item['raw_count']
+        
+        normalized_loss_rate = (raw_count / avg_ridership) * 10000 
+        
+        weather_weight = 1.0 
+        umbrella_impact_ratio = 1.0
+        
+        if is_rainy_today:
+            
+            rain_report = RainImpactReport.objects.filter(
+                line_code=line_input
+            ).order_by('-created_at').first()
+            
+            if category == '우산' and rain_report:
+                weather_weight = max(1.0, rain_report.rain_impact_index / 60)
+                umbrella_impact_ratio = weather_weight
+                special_warning = f"비 오는 날 혼잡도가 높습니다. 우산 분실률이 약 {umbrella_impact_ratio:.1f}배 높습니다. 주의하세요."
+            elif category == '가방':
+                if rain_report and rain_report.rain_impact_index > 100:
+                     weather_weight = 1.0 + (rain_report.rain_impact_index - 100) / 500
+                     
+        
+        final_prediction = normalized_loss_rate * weather_weight
+        report_items.append({
+            'category': category,
+            'prediction': final_prediction,
+        })
+        
+    sorted_items = sorted(report_items, key=lambda x: x['prediction'], reverse=True)[:3]
+    total_prediction_sum = sum(item['prediction'] for item in sorted_items)
+    
+    if total_prediction_sum > 0:
+        for item in sorted_items:
+            item['rate'] = round((item['prediction'] / total_prediction_sum) * 100, 1)
     else:
-        total_predicted_loss = base_rate
-    
-    
-    # 4. 템플릿으로 전달할 Context 구성
-    context = {
+        sorted_items = [{'category': 'N/A', 'rate': 0.0}]
+
+    report = {
         'line': line_input,
-        'current_date': timezone.now().date(),
-        'is_rainy_today': is_rainy_today,
-        
-        # ★ 최종 예측 문구에 필요한 핵심 값
-        'total_predicted_loss': round(total_predicted_loss, 2), # 오늘의 분실 예보 (Loss Rate per 10k)
-        'umbrella_impact_ratio': umbrella_impact_ratio, # 2.3배
-        
-        # 노선별 RII 상세 보고서 (템플릿 출력용)
-        'latest_reports': RainImpactReport.objects.order_by('line_code'), 
-        
-        # 이전 로직에서 사용되던 변수들 (템플릿과의 호환성을 위해 유지하거나 정리 필요)
         'date_condition': request.GET.get('condition', '평소'),
-        'latest_date': RidershipDaily.objects.order_by('-date').values_list('date', flat=True).first(),
-        'items': [{'category': '우산', 'rate': 40.0}, {'category': '가방', 'rate': 30.0}], # 가상 데이터
-        # 'report' 딕셔너리 대신 context에 직접 풀어서 전달하도록 구조 변경됨
+        'latest_date': latest_date,
+        'items': sorted_items,
+        'warning': special_warning
     }
     
-    return render(request, 'main/home.html', context)
+    return render(request, 'main/home.html', {'report': report})
 
 
 # ----------------------------------------------------------------------
@@ -212,6 +230,7 @@ def lostitem_list(request):
     if form.is_valid():
         data = form.cleaned_data
         
+        # ... (필터링 로직 유지)
         if data['q']:
             queryset = queryset.filter(
                 Q(item_name__icontains=data['q']) |
@@ -273,7 +292,7 @@ def lostitem_list(request):
         'page_obj': page_obj,
         'url_query_string': url_query_string,
         'total_count': queryset.count(),
-        'items': queryset,
+        'items': page_obj.object_list, # 템플릿에 전달할 항목
     }
     
     return render(request, 'main/lostitem_list.html', context)
@@ -282,120 +301,23 @@ def lostitem_list(request):
 # ----------------------------------------------------------------------
 # 4. 분석 결과 뷰 (trend, correlation, insight)
 # ----------------------------------------------------------------------
-from django.db.models.functions import ExtractWeekDay
-
 def trend_analysis(request):
     """
-    노선별 · 역별 · 요일별 분실 패턴 분석
+    Trend 페이지: 노선/월별/요일별 분실 패턴 시각화 (기획서 항목)
     """
-    # --------------------------------------------------
-    # 1️⃣ Trend 데이터 (LostItem 집계)
-    # 최근 90일 데이터만 사용
-    queryset = LostItem.objects.filter()
+    # ... (분석 로직 필요)
+    return HttpResponse("<h2>Trend Analysis Page</h2><p>노선별, 요일별 분실 패턴 분석 결과가 표시될 예정입니다.</p>")
 
-    trend_data = (
-        queryset
-        .annotate(weekday=ExtractWeekDay('registered_at'))  # 1=일요일, 2=월요일 ...
-        .values('line', 'station', 'weekday')
-        .annotate(count=Count('id'))
-        .order_by('line', 'station', 'weekday')
-    )
-
-    reports = RainImpactReport.objects.all()
-    line_stats = (
-        reports.values('line_code')
-        .annotate(avg_rii=Avg('rain_impact_index'))
-        .order_by('line_code')
-    )
-
-    context = {
-        'reports': reports,
-        'chart_labels': [stat['line_code'] for stat in line_stats],
-        'chart_values': [round(stat['avg_rii'], 2) for stat in line_stats],
-        'total_stations': reports.count(),
-        'avg_rii': reports.aggregate(Avg('rain_impact_index'))['rain_impact_index__avg'] or 0,
-    }
-
-    return render(request, 'main/trend_analysis.html', context)
 def correlation_analysis(request):
-    today = timezone.now().date()
-    start_date = today - timedelta(days=30)
-    
-    # 최근 30일 기온, 강수, 분실물 개수 집계
-    weather_data = WeatherDaily.objects.filter()
-    lost_data = (
-        LostItem.objects
-        .filter()
-        .extra(select={'date': "date(registered_at)"})
-        .values('date')
-        .annotate(lost_count=Count('id'))
-    )
-
-    # 날짜별 매칭
-    merged = []
-    for w in weather_data:
-        lost_count = next((x['lost_count'] for x in lost_data if str(x['date']) == str(w.date)), 0)
-        merged.append({
-            'date': w.date.strftime("%Y-%m-%d"),  # JS에서 문자열로 사용
-            'temp': w.avg_temp,
-            'rain': w.rain_mm,
-            'lost': lost_count,
-        })
-
-    # 상관계수 계산
-    def correlation(xs, ys):
-        if not xs or not ys or len(xs) != len(ys):
-            return 0
-        mean_x = sum(xs)/len(xs)
-        mean_y = sum(ys)/len(ys)
-        num = sum((x-mean_x)*(y-mean_y) for x, y in zip(xs, ys))
-        den = (sum((x-mean_x)**2 for x in xs) * sum((y-mean_y)**2 for y in ys)) ** 0.5
-        return round(num/den, 3) if den else 0
-
-    temp_corr = correlation([m['temp'] for m in merged if m['temp'] is not None], [m['lost'] for m in merged])
-    rain_corr = correlation([m['rain'] for m in merged if m['rain'] is not None], [m['lost'] for m in merged])
-
-    context = {
-        'merged': merged,
-        'temp_corr': temp_corr,
-        'rain_corr': rain_corr,
-        'has_data': bool(merged),
-    }
-
-    return render(request, 'main/correlation_analysis.html', context)
+    """
+    Correlation 페이지: 날씨·혼잡도 상관 분석 결과 (기획서 항목)
+    """
+    # ... (분석 로직 필요)
+    return HttpResponse("<h2>Correlation Analysis Page</h2><p>날씨·혼잡도 지수와 분실률 간의 상관관계 분석 결과가 표시될 예정입니다.</p>")
 
 def insight_report(request):
-    # 노선별 평균 RII
-    avg_rii = (
-        RainImpactReport.objects
-        .values('line_code')
-        .annotate(avg_index=Avg('rain_impact_index'))
-        .order_by('-avg_index')
-    )
-
-    # 분실물 상위 노선 TOP 5
-    lost_top = (
-        LostItem.objects
-        .values('line')
-        .annotate(total_lost=Count('id'))
-        .order_by('-total_lost')[:5]
-    )
-
-    # 간단한 요약 문 생성
-    summary = ""
-    if avg_rii:
-        top_line = avg_rii[0]['line_code']
-        top_value = round(avg_rii[0]['avg_index'], 2)
-        summary += f"비의 영향을 가장 많이 받은 노선은 {top_line}이며, 평균 RII는 {top_value}입니다. "
-    if lost_top:
-        summary += f"가장 분실물이 많은 노선은 {lost_top[0]['line']}입니다. "
-    if not summary:
-        summary = "데이터가 부족하여 인사이트를 생성할 수 없습니다."
-
-    context = {
-        'avg_rii': avg_rii,
-        'lost_top': lost_top,
-        'summary': summary,
-    }
-
-    return render(request, 'main/insight_report.html', context)
+    """
+    Insight 페이지: 결론 및 가설 검증 리포트 (기획서 항목)
+    """
+    # ... (분석 로직 필요)
+    return HttpResponse("<h2>Insight Report Page</h2><p>분석 가설(혼잡도, 비 등)에 대한 최종 검증 결과와 결론이 표시될 예정입니다.</p>")

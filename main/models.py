@@ -82,7 +82,7 @@ class WeatherDaily(models.Model):
     일별 날씨 정보 모델.
     OpenWeatherMap 또는 기상청 API 데이터를 저장. (B 담당)
     """
-    date = models.DateField(unique=True, db_index=True, verbose_name="날짜")
+    date = models.DateField(db_index=True, verbose_name="날짜")
     city_code = models.CharField(max_length=50, default='SEOUL', verbose_name="도시 코드")
     is_rainy = models.BooleanField(default=False, verbose_name="강수 여부", help_text="강수량이 0 이상이면 True")
     rain_mm = models.FloatField(default=0.0, verbose_name="일 강수량 (mm)")
@@ -96,8 +96,7 @@ class WeatherDaily(models.Model):
     def __str__(self):
         rain_status = "비 옴" if self.is_rainy else "맑음/흐림"
         return f"{self.date} ({self.city_code}): {rain_status}, {self.rain_mm}mm"
-    
-    # main/models.py 파일에 다음 클래스를 추가합니다.
+
 
 class RainImpactReport(models.Model):
     """
