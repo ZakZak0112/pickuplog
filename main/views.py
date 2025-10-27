@@ -147,12 +147,12 @@ def home(request):
     PickUpLog 홈 화면 뷰: 오늘의 분실 예보 및 RII 기반 인사이트를 제공합니다.
     """
     # 1. 사용자 입력 및 기본 설정
-    line_input = request.GET.get('line', 'LINE2') 
+    line_input = request.GET.get('line', '선택') 
     is_rainy_today = (request.GET.get('condition', '평소') == '비오는 날')
     
     # 2. RII 데이터 조회 및 평균 계산
     try:
-        # DB에서 RII 평균을 계산 (reports.py에서 생성된 가상 데이터를 기반으로)
+        # DB에서 RII 평균을 계산 
         avg_rii = RainImpactReport.objects.aggregate(avg_rii=Avg('rain_impact_index'))['avg_rii']
     except Exception:
         # 데이터가 없거나 모델 정의 오류 시 기본값 설정
@@ -291,16 +291,7 @@ def trend_analysis(request):
     # --------------------------------------------------
     # 1️⃣ Trend 데이터 (LostItem 집계)
     # 최근 90일 데이터만 사용
-    queryset = LostItem.objects.filter()
-
-    trend_data = (
-        queryset
-        .annotate(weekday=ExtractWeekDay('registered_at'))  # 1=일요일, 2=월요일 ...
-        .values('line', 'station', 'weekday')
-        .annotate(count=Count('id'))
-        .order_by('line', 'station', 'weekday')
-    )
-
+    
     reports = RainImpactReport.objects.all()
     line_stats = (
         reports.values('line_code')
@@ -317,10 +308,7 @@ def trend_analysis(request):
     }
 
     return render(request, 'main/trend_analysis.html', context)
-def correlation_analysis(request):
-    today = timezone.now().date()
-    start_date = today - timedelta(days=30)
-    
+def correlation_analysis(request):    
     # 최근 30일 기온, 강수, 분실물 개수 집계
     weather_data = WeatherDaily.objects.filter()
     lost_data = (
