@@ -52,9 +52,16 @@
             <h3>분실 예보 조건 설정</h3>
             <label for="line" style="font-weight: bold;">노선:</label>
             <select name="line" id="line">
-                <option value="LINE2" {% if line == 'LINE2' %}selected{% endif %}>2호선</option>
+                <option value="선택">선택</option>
                 <option value="LINE1" {% if line == 'LINE1' %}selected{% endif %}>1호선</option>
+                <option value="LINE2" {% if line == 'LINE2' %}selected{% endif %}>2호선</option>
                 <option value="LINE3" {% if line == 'LINE3' %}selected{% endif %}>3호선</option>
+                <option value="LINE4" {% if line == 'LINE4' %}selected{% endif %}>4호선</option>
+                <option value="LINE5" {% if line == 'LINE5' %}selected{% endif %}>5호선</option>
+                <option value="LINE6" {% if line == 'LINE6' %}selected{% endif %}>6호선</option>
+                <option value="LINE7" {% if line == 'LINE7' %}selected{% endif %}>7호선</option>
+                <option value="LINE8" {% if line == 'LINE8' %}selected{% endif %}>8호선</option>
+                <option value="LINE9" {% if line == 'LINE9' %}selected{% endif %}>9호선</option>
             </select>
             
             <label for="condition" style="font-weight: bold; margin-left: 20px;">날씨:</label>
