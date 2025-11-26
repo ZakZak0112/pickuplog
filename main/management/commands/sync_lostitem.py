@@ -6,7 +6,7 @@ from django.utils import timezone
 import os
 from dotenv import load_dotenv
 
-from main.models import LostItem
+from main.models import LostItem, StationDict
 
 # --- Helper Functions ---
 def parse_date_and_make_aware(date_str):
@@ -30,7 +30,7 @@ def parse_date_and_make_aware(date_str):
 
 
 class Command(BaseCommand):
-    help = '서울시 공공 API를 통해 분실물 데이터를 가져와 LostItem 모델에 적재합니다. (API 기반)'
+    help = '서울시 공공 API를 통해 분실물 데이터를 가져와 LostItem 모델에 적재합니다. (transport 분류 개선)'
 
     def handle(self, *args, **options):
         load_dotenv()
@@ -38,6 +38,20 @@ class Command(BaseCommand):
         BASE_URL = f"http://openapi.seoul.go.kr:8088/{API_KEY}/json/lostArticleInfo/1/1000/" 
         
         self.stdout.write(self.style.MIGRATE_HEADING('LostItem 데이터 동기화 시작...'))
+        
+        # 서울 지하철역 목록 로드 (StationDict 활용)
+        subway_stations = set()
+        for sd in StationDict.objects.all():
+            subway_stations.add(sd.station_name_raw)
+            # "강남역" 형태로도 추가
+            if not sd.station_name_raw.endswith('역'):
+                subway_stations.add(sd.station_name_raw + '역')
+            # 표준명으로도 추가
+            subway_stations.add(sd.station_name_std)
+            if not sd.station_name_std.endswith('역'):
+                subway_stations.add(sd.station_name_std + '역')
+        
+        self.stdout.write(f'[INFO] 서울 지하철역 {len(subway_stations)}개 로드 완료')
         
         try:
             response = requests.get(BASE_URL, timeout=10)
@@ -58,27 +72,44 @@ class Command(BaseCommand):
                     "경서운수", "대하운수", "동성상운",]
 
         success_count = 0
+        subway_count = 0
+        train_count = 0
         
         with transaction.atomic():
             for data in rows:
                 CSTD_PLC = data.get("CSTD_PLC", "")
                 RCPL = data.get("RCPL", "")
                 
-                # 🚇 교통수단 및 역명 판별
+                # 교통수단 및 역명 판별 (개선됨!)
+                transport = "etc"
+                station_name = ""
+                
                 if CSTD_PLC.endswith("역"):
-                    transport = "subway"
-                    station_name = CSTD_PLC
+                    # "역"으로 끝나는 경우
+                    # 1. StationDict에 있으면 지하철역
+                    if CSTD_PLC in subway_stations:
+                        transport = "subway"
+                        station_name = CSTD_PLC
+                        subway_count += 1
+                    else:
+                        # 2. StationDict에 없으면 기차역 등 기타
+                        transport = "etc"
+                        station_name = CSTD_PLC
+                        train_count += 1
+                        
                 elif RCPL in busList:
                     transport = "bus"
                     station_name = ""
+                    
                 elif RCPL in taxiList:
                     transport = "taxi"
                     station_name = ""
+                    
                 else: 
                     transport = "etc"
                     station_name = ""
                 
-                # 📅 날짜 필드 처리
+                # 날짜 필드 처리
                 registered_at = parse_date_and_make_aware(data.get("REG_YMD"))
                 received_at = parse_date_and_make_aware(data.get("RCV_YMD"))
                 
@@ -108,5 +139,7 @@ class Command(BaseCommand):
                     continue
 
         self.stdout.write(self.style.SUCCESS(
-            f'✅ LostItem 데이터 동기화 완료! 총 {len(rows)}건 중 {success_count}건 적재/업데이트되었습니다.'
+            f'[SUCCESS] LostItem 데이터 동기화 완료! 총 {len(rows)}건 중 {success_count}건 적재/업데이트되었습니다.'
         ))
+        self.stdout.write(f'   - 지하철역: {subway_count}건')
+        self.stdout.write(f'   - 기차역/기타: {train_count}건')

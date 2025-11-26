@@ -1,8 +1,7 @@
-# pickuplog/main/management/commands/sync_reports.py (최종 수정)
+# pickuplog/main/management/commands/sync_reports.py (최종 수정: Importlib 사용)
 
 from django.core.management.base import BaseCommand, CommandError
-# 💡 수정: calculate_rain_impact_index 함수 임포트를 제거합니다.
-# from main.reports import calculate_rain_impact_index 
+from importlib import import_module # 💡 importlib 추가
 
 class Command(BaseCommand):
     """
@@ -13,15 +12,18 @@ class Command(BaseCommand):
     
     help = 'Calculates RII and generates the RainImpactReport.'
 
-    
     def handle(self, *args, **options):
-        # 💡 수정: 함수 호출 시점에 모듈을 로드합니다.
-        # 이렇게 하면 Django가 settings 및 URL을 로드하는 과정에서 reports.py를 강제로 로드하지 않습니다.
+        
+        # 💡 수정: importlib를 사용하여 모듈 로드 오류를 회피합니다.
         try:
-            from main.reports import calculate_rain_impact_index
-        except ImportError:
-            self.stdout.write(self.style.ERROR('❌ ERROR: main.reports 모듈 로드에 실패했습니다. (순환 참조 문제 재확인 필요)'))
-            return
+            reports_module = import_module('main.reports')
+            calculate_rain_impact_index = reports_module.calculate_rain_impact_index
+        except AttributeError:
+             # reports.py가 로드되었으나 함수를 찾지 못할 경우
+             raise CommandError('❌ ERROR: main.reports 모듈에 "calculate_rain_impact_index" 함수가 정의되지 않았습니다.')
+        except ImportError as e:
+            # 순환 참조 등으로 인해 모듈 로드가 실패했을 경우
+            raise CommandError(f'❌ ERROR: main.reports 모듈 로드 실패 (ImportError): {e}')
             
         self.stdout.write(self.style.NOTICE('=== PickUpLog: 종합 분실 분석 시작 (sync_reports) ==='))
 
@@ -39,9 +41,7 @@ class Command(BaseCommand):
                  ))
 
         except Exception as e:
-            # 💡 수정: 최종 오류 시에만 raise하여 스택 트레이스를 유지하고, CommandError로 변환하여 깔끔하게 종료합니다.
             self.stdout.write(self.style.ERROR(
                 f'❌ 보고서 생성 중 치명적인 오류 발생: {e}'
             ))
             raise CommandError(f"보고서 생성 실패: {e}")
-        
