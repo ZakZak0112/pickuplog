@@ -16,4 +16,5 @@ urlpatterns = [
     path('archive/lostitem/create/', views.lostitem_create, name='lostitem_create'), 
     path('archive/lostitem/update/<int:pk>/', views.lostitem_update, name='lostitem_update'),
     path('archive/lostitem/upload/csv/', views.lostitem_upload_csv, name='lostitem_upload_csv'), 
+    path('weather-report/', views.weather_lostitem_report, name='weather_lostitem_report'),
 ]

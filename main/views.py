@@ -9,6 +9,10 @@ from django.http import HttpResponse
 from datetime import datetime, timedelta
 from django.shortcuts import render
 
+from django.db.models import Subquery, OuterRef
+from django.db.models.functions import TruncDate
+from .models import LostItem, StationDict, WeatherDaily, RidershipDaily
+
 # 프로젝트 모델 임포트
 from .models import LostItem, RidershipDaily, RainImpactReport, WeatherDaily 
 # .forms 임포트는 제거 (최종 코드 제공을 위해)
@@ -387,3 +391,57 @@ def insight_report(request):
     }
 
     return render(request, 'main/insight_report.html', context)
+
+
+#날씨별, 노선별, 역별 분실물 + 승하차 인원 집계 뷰
+def weather_lostitem_report(request):
+
+    # 1️⃣ LostItem 날짜 기준
+    lostitems = LostItem.objects.annotate(
+        date=TruncDate('registered_at')
+    )
+
+    # 2️⃣ StationDict 연결 (역명 표준화)
+    station_std_qs = StationDict.objects.filter(
+        station_name_raw=OuterRef('station'),
+        line_code=OuterRef('line')
+    ).values('station_name_std')[:1]
+
+    lostitems = lostitems.annotate(
+        station_std=Subquery(station_std_qs)
+    )
+
+    # 3️⃣ WeatherDaily 연결 (날짜 기준, 서울)
+    weather_qs = WeatherDaily.objects.filter(
+        date=OuterRef('date'),
+        city_code='SEOUL'
+    )
+
+    lostitems = lostitems.annotate(
+        is_rainy=Subquery(weather_qs.values('is_rainy')[:1]),
+        rain_mm=Subquery(weather_qs.values('rain_mm')[:1])
+    )
+
+    # 4️⃣ RidershipDaily 연결 (날짜 + line + station_std)
+    ridership_qs = RidershipDaily.objects.filter(
+        date=OuterRef('date'),
+        line_code=OuterRef('line'),
+        station_name_std=OuterRef('station_std')
+    )
+
+    lostitems = lostitems.annotate(
+        boardings=Subquery(ridership_qs.values('boardings')[:1]),
+        alightings=Subquery(ridership_qs.values('alightings')[:1]),
+        total_passengers=Subquery(ridership_qs.values('total')[:1])
+    )
+
+    # 5️⃣ 분석: 노선별, 역별, 기상 조건별 집계
+    report = lostitems.values('line', 'station_std', 'is_rainy').annotate(
+        lost_count=Count('id'),
+        total_boardings=Sum('boardings'),
+        total_alightings=Sum('alightings'),
+        total_passengers=Sum('total_passengers')
+    ).order_by('line', 'station_std', 'is_rainy')
+
+    # 6️⃣ 템플릿 전달
+    return render(request, 'main/weather_lostitem_report.html', {'report': report})
