@@ -9,9 +9,9 @@ from django.http import HttpResponse
 from datetime import datetime, timedelta
 from django.shortcuts import render
 
-from django.db.models import Subquery, OuterRef
-from django.db.models.functions import TruncDate
-from .models import LostItem, StationDict, WeatherDaily, RidershipDaily
+from django.shortcuts import render
+import pandas as pd
+from main.models import LostItem, WeatherDaily, RidershipDaily, StationDict
 
 # 프로젝트 모델 임포트
 from .models import LostItem, RidershipDaily, RainImpactReport, WeatherDaily 
@@ -394,54 +394,52 @@ def insight_report(request):
 
 
 #날씨별, 노선별, 역별 분실물 + 승하차 인원 집계 뷰
-def weather_lostitem_report(request):
+def lostitem_analysis_view(request):
+    # 1) LostItem 데이터 불러오기
+    lostitems = LostItem.objects.all().values('registered_at', 'category')
+    lost_df = pd.DataFrame(lostitems)
 
-    # 1️⃣ LostItem 날짜 기준
-    lostitems = LostItem.objects.annotate(
-        date=TruncDate('registered_at')
+    if lost_df.empty:
+        return render(request, 'main/analysis.html', {'reports': []})
+
+    # 날짜만 추출 & Null category 처리
+    lost_df['date'] = pd.to_datetime(lost_df['registered_at']).dt.date
+    lost_df['category'] = lost_df['category'].fillna('기타')
+
+    # 2) 날짜별, 분실물 종류별 개수 집계 (피벗)
+    pivot_df = lost_df.pivot_table(
+        index='date',
+        columns='category',
+        values='registered_at',
+        aggfunc='count',
+        fill_value=0
+    ).reset_index()
+
+    # 컬럼 이름 초기화 (템플릿에서 편하게 사용)
+    pivot_df.columns.name = None
+
+    # 3) WeatherDaily 불러오기
+    weather = WeatherDaily.objects.all().values(
+        'date',
+        'is_rainy',
+        'rain_mm',
+        'avg_temp'
     )
+    weather_df = pd.DataFrame(weather)
+    weather_df['date'] = pd.to_datetime(weather_df['date']).dt.date
 
-    # 2️⃣ StationDict 연결 (역명 표준화)
-    station_std_qs = StationDict.objects.filter(
-        station_name_raw=OuterRef('station'),
-        line_code=OuterRef('line')
-    ).values('station_name_std')[:1]
+    # 4) 날씨 + 분실물 merge
+    final_df = pd.merge(
+        weather_df,
+        pivot_df,
+        on='date',
+        how='left'
+    ).fillna(0)
 
-    lostitems = lostitems.annotate(
-        station_std=Subquery(station_std_qs)
-    )
+    # 최신순 정렬
+    final_df = final_df.sort_values('date', ascending=False)
 
-    # 3️⃣ WeatherDaily 연결 (날짜 기준, 서울)
-    weather_qs = WeatherDaily.objects.filter(
-        date=OuterRef('date'),
-        city_code='SEOUL'
-    )
+    # HTML로 전달
+    reports = final_df.to_dict(orient='records')
 
-    lostitems = lostitems.annotate(
-        is_rainy=Subquery(weather_qs.values('is_rainy')[:1]),
-        rain_mm=Subquery(weather_qs.values('rain_mm')[:1])
-    )
-
-    # 4️⃣ RidershipDaily 연결 (날짜 + line + station_std)
-    ridership_qs = RidershipDaily.objects.filter(
-        date=OuterRef('date'),
-        line_code=OuterRef('line'),
-        station_name_std=OuterRef('station_std')
-    )
-
-    lostitems = lostitems.annotate(
-        boardings=Subquery(ridership_qs.values('boardings')[:1]),
-        alightings=Subquery(ridership_qs.values('alightings')[:1]),
-        total_passengers=Subquery(ridership_qs.values('total')[:1])
-    )
-
-    # 5️⃣ 분석: 노선별, 역별, 기상 조건별 집계
-    report = lostitems.values('line', 'station_std', 'is_rainy').annotate(
-        lost_count=Count('id'),
-        total_boardings=Sum('boardings'),
-        total_alightings=Sum('alightings'),
-        total_passengers=Sum('total_passengers')
-    ).order_by('line', 'station_std', 'is_rainy')
-
-    # 6️⃣ 템플릿 전달
-    return render(request, 'main/weather_lostitem_report.html', {'report': report})
+    return render(request, 'main/analysis.html', {'reports': reports})

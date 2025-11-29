@@ -1,96 +1,105 @@
-import pandas as pd
-import requests_cache
-from retry_requests import retry
-import openmeteo_requests
-from datetime import datetime
-
+import requests
+from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
+from django.conf import settings
 from main.models import WeatherDaily
+import xml.etree.ElementTree as ET
+from urllib.parse import quote
 
 class Command(BaseCommand):
-    help = "Sync past weather data for Seoul using Open-Meteo kma_seamless model"
+    help = "기상청 ASOS XML 데이터(서울 108번)를 불러와 WeatherDaily에 저장합니다."
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--start',
+            type=str,
+            help="시작일 (YYYYMMDD) — 기본: 최근 3개월 전"
+        )
+        parser.add_argument(
+            '--end',
+            type=str,
+            help="종료일 (YYYYMMDD) — 기본: 어제"
+        )
 
     def handle(self, *args, **options):
-        # Setup Open-Meteo API client with cache and retry
-        cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
-        retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
-        client = openmeteo_requests.Client(session=retry_session)
+        today = datetime.today().date()
+        default_end = today - timedelta(days=1)
+        default_start = today - timedelta(days=90)
 
-        # API 요청 파라미터
-        url = "https://api.open-meteo.com/v1/forecast"
-        params = {
-            "latitude": 37.56,          # 서울 위도
-            "longitude": 127.0,         # 서울 경도
-            "daily": ["weather_code", "temperature_2m_max", "temperature_2m_min", "rain_sum"],
-            "models": "kma_seamless",
-            "past_days": 92,             # 과거 92일치
-            "timezone": "Asia/Seoul"
-        }
+        start_date = options["start"] or default_start.strftime("%Y%m%d")
+        end_date = options["end"] or default_end.strftime("%Y%m%d")
 
-        # API 호출
-        responses = client.weather_api(url, params=params)
-        response = responses[0]  # 단일 좌표만 사용
+        self.stdout.write(self.style.NOTICE(
+            f"[기상청 ASOS] {start_date} ~ {end_date} 데이터 수집 시작..."
+        ))
 
-        # Daily 데이터 처리
-        daily = response.Daily()
-        
-        # 데이터 추출
-        temp_max = daily.Variables(1).ValuesAsNumpy()
-        temp_min = daily.Variables(2).ValuesAsNumpy()
-        rain_sum = daily.Variables(3).ValuesAsNumpy()
-        
-        # 실제 데이터 길이 확인
-        num_days = len(temp_max)
-        start_timestamp = daily.Time()
-        
-        self.stdout.write(f"Start timestamp: {start_timestamp}")
-        self.stdout.write(f"Start date: {datetime.fromtimestamp(start_timestamp)}")
-        self.stdout.write(f"Number of data points: {num_days}")
-        self.stdout.write(f"temp_max length: {len(temp_max)}")
-        self.stdout.write(f"temp_min length: {len(temp_min)}")
-        self.stdout.write(f"rain_sum length: {len(rain_sum)}")
-        
-        # 날짜 범위 생성
-        dates = pd.date_range(
-            start=pd.Timestamp(start_timestamp, unit="s"),
-            periods=num_days,
-            freq="D"
+        # 서비스키 안전 인코딩
+        service_key = "ea75cf77fdfafd681baef485ee16d1438074896ad9380e8160ed5dfe87a4eb80"
+        encoded_key = quote(service_key, safe='')  # URL 안전 인코딩
+
+        url = (
+            f"http://apis.data.go.kr/1360000/AsosDalyInfoService/getWthrDataList"
+            f"?serviceKey={encoded_key}"
+            f"&dataType=XML"
+            f"&numOfRows=500"
+            f"&pageNo=1"
+            f"&dataCd=ASOS"
+            f"&dateCd=DAY"
+            f"&startDt={start_date}"
+            f"&endDt={end_date}"
+            f"&stnIds=108"
         )
-        
-        self.stdout.write(f"\nFirst 5 dates:")
-        for d in dates[:5]:
-            self.stdout.write(f"  {d.date()}")
 
-        # DataFrame 생성
-        df = pd.DataFrame({
-            "date": [d.date() for d in dates],
-            "avg_temp": (temp_max + temp_min) / 2,
-            "rain_mm": rain_sum
-        })
-        
-        # 결측치 처리
-        df["rain_mm"] = df["rain_mm"].fillna(0)
-        df["is_rainy"] = df["rain_mm"] > 0
+        response = requests.get(url)
 
-        # DB 저장
-        created_count = 0
-        updated_count = 0
-        
-        for _, row in df.iterrows():
-            weather_obj, created = WeatherDaily.objects.update_or_create(
-                date=row["date"],
+        if response.status_code != 200:
+            self.stderr.write(f"HTTP 오류: {response.status_code}")
+            self.stderr.write(response.text[:500])
+            return
+
+        # XML 파싱
+        try:
+            root = ET.fromstring(response.text)
+        except ET.ParseError:
+            self.stderr.write("⚠ XML 파싱 실패")
+            self.stderr.write(response.text[:500])
+            return
+
+        header = root.find("header")
+        result_code = header.findtext("resultCode")
+        result_msg = header.findtext("resultMsg")
+        if result_code != "00":
+            self.stderr.write(f"API 오류: {result_msg}")
+            return
+
+        items = root.find("body/items")
+        if items is None:
+            self.stderr.write("데이터가 없습니다.")
+            return
+
+        saved_count = 0
+        for item in items.findall("item"):
+            date_str = item.findtext("tm")
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+
+            avg_temp = item.findtext("avgTa")
+            avg_temp = float(avg_temp) if avg_temp not in [None, ""] else None
+
+            rain_mm = item.findtext("sumRn")
+            rain_mm = float(rain_mm) if rain_mm not in [None, ""] else 0.0
+            is_rainy = rain_mm > 0
+
+            WeatherDaily.objects.update_or_create(
+                date=date_obj,
                 city_code="SEOUL",
                 defaults={
-                    "avg_temp": float(row["avg_temp"]),
-                    "rain_mm": float(row["rain_mm"]),
-                    "is_rainy": bool(row["is_rainy"])
+                    "avg_temp": avg_temp,
+                    "rain_mm": rain_mm,
+                    "is_rainy": is_rainy,
                 }
             )
-            if created:
-                created_count += 1
-                self.stdout.write(f"✓ Created: {weather_obj.date}")
-            else:
-                updated_count += 1
+            saved_count += 1
 
-        self.stdout.write(self.style.SUCCESS(f"\nSuccessfully synced {len(df)} days of weather data for Seoul"))
-        self.stdout.write(self.style.SUCCESS(f"Created: {created_count}, Updated: {updated_count}"))
+        self.stdout.write(self.style.SUCCESS(
+            f"✔ 수집 완료 — 총 {saved_count}건 저장됨."
+        ))

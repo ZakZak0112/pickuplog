@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>날짜별 날씨 & 분실물 개수</title>
+    <style>
+        body {
+            font-family: "Malgun Gothic", sans-serif;
+            background-color: #f9f9f9;
+            margin: 20px;
+        }
+
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        thead {
+            background-color: #4CAF50;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            text-align: center;
+            font-size: 14px;
+            max-width: 150px;
+            word-wrap: break-word;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        tbody tr:hover {
+            background-color: #e0f7fa;
+        }
+
+        /* 0이 아닌 값 강조 */
+        td.highlight {
+            background-color: #ffeb3b;
+        }
+
+        @media screen and (max-width: 768px) {
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+            th {
+                text-align: left;
+            }
+            td {
+                text-align: left;
+                padding-left: 50%;
+                position: relative;
+            }
+            td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 15px;
+                font-weight: bold;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<h2>날짜별 날씨 정보 & 분실물 개수 (최신순)</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>날짜</th>
+            <th>평균기온 (℃)</th>
+            <th>강수량 (mm)</th>
+            {% for category in reports.0.keys %}
+                {% if category not in 'date avg_temp rain_mm is_rainy' %}
+                    <th>{{ category }}</th>
+                {% endif %}
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in reports %}
+        <tr>
+            <td data-label="날짜">{{ r.date }}</td>
+            <td data-label="평균기온">{{ r.avg_temp }}</td>
+            <td data-label="강수량">{{ r.rain_mm }}</td>
+            {% for key, value in r.items %}
+                {% if key not in 'date avg_temp rain_mm is_rainy' %}
+                    <td data-label="{{ key }}"
+                        {% if value != 0 %}
+                            class="highlight"
+                        {% endif %}
+                    >
+                        {{ value|floatformat:0 }}
+                    </td>
+                {% endif %}
+            {% endfor %}
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="100%">데이터가 없습니다.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+</body>
+</html>
