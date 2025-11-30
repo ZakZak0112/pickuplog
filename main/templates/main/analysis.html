@@ -5,76 +5,94 @@
 <title>날씨와 분실물 개수 상관관계</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-body { font-family: "Malgun Gothic", sans-serif; background-color:#f9f9f9; margin:20px; }
-h2 { text-align:center; color:#333; }
-button { margin-top:20px; padding:10px 20px; font-size:14px; cursor:pointer; }
-#chart-container { display:none; margin-top:20px; height:500px; }
-table { width:100%; border-collapse:collapse; margin-top:20px; background-color:#fff; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
-thead { background-color:#4CAF50; color:white; position:sticky; top:0; }
-th, td { padding:12px 15px; border:1px solid #ddd; text-align:center; font-size:14px; }
-tbody tr:nth-child(even) { background-color:#f2f2f2; }
-tbody tr:hover { background-color:#e0f7fa; }
-td.highlight { background-color:#ffeb3b; }
+body { font-family:"Malgun Gothic", sans-serif; background:#f9f9f9; margin:20px; }
+h2 { text-align:center; }
+button { margin-top:10px; padding:10px 20px; cursor:pointer; }
+
+#chart-main, #chart-reg { display:none; margin-top:20px; height:500px; }
+
+table { width:100%; margin-top:20px; border-collapse:collapse; background:#fff; }
+th, td { border:1px solid #ddd; padding:10px; text-align:center; }
+thead { background:#4CAF50; color:white; }
+td.highlight { background:#ffeb3b; }
 </style>
 </head>
 <body>
 
-<h2>날씨와 분실물 개수 상관관계</h2>
-<button id="toggle-chart">그래프 보기 / 숨기기</button>
+<h2>날씨와 분실물 개수 분석</h2>
 
-<div id="chart-container">
-    <canvas id="lostitem-chart"></canvas>
-</div>
+<!-- 버튼 영역 -->
+<button id="toggle-main-chart">상관관계 그래프 보기</button>
+<button id="toggle-reg-chart">강수량-분실물 회귀 그래프 보기</button>
 
+<!-- 그래프 영역 -->
+<div id="chart-main"><canvas id="lostitem-chart"></canvas></div>
+<div id="chart-reg"><canvas id="reg-chart"></canvas></div>
+
+<!-- 표 영역 -->
 <table id="lostitem-table">
 <thead>
 <tr>
-<th>날짜</th>
-<th>평균기온 (℃)</th>
-<th>강수량 (mm)</th>
-{% for key in reports.0.keys %}
-    {% if key != 'date' and key != 'avg_temp' and key != 'rain_mm' and key != 'is_rainy' %}
-        <th>{{ key }}</th>
-    {% endif %}
-{% endfor %}
+    <th>날짜</th>
+    <th>평균기온 (℃)</th>
+    <th>강수량 (mm)</th>
+    {% for key in reports.0.keys %}
+        {% if key != 'date' and key != 'avg_temp' and key != 'rain_mm' and key != 'is_rainy' %}
+            <th>{{ key }}</th>
+        {% endif %}
+    {% endfor %}
 </tr>
 </thead>
+
 <tbody>
 {% for r in reports %}
 <tr>
 <td>{{ r.date }}</td>
 <td>{{ r.avg_temp }}</td>
 <td>{{ r.rain_mm }}</td>
-{% for key, val in r.items %}
-    {% if key != 'date' and key != 'avg_temp' and key != 'rain_mm' and key != 'is_rainy' %}
-        <td {% if val != 0 %} class="highlight" {% endif %}>{{ val|floatformat:0 }}</td>
-    {% endif %}
+
+{% for key,val in r.items %}
+{% if key != 'date' and key != 'avg_temp' and key != 'rain_mm' and key != 'is_rainy' %}
+    <td {% if val != 0 %} class="highlight" {% endif %}>
+        {{ val|floatformat:0 }}
+    </td>
+{% endif %}
 {% endfor %}
+
 </tr>
 {% endfor %}
 </tbody>
 </table>
 
-<!-- Django JSON 전달 -->
+<!-- Django JSON -->
 {{ reports|json_script:"reports-data" }}
 
 <script>
-const toggleBtn = document.getElementById('toggle-chart');
-const chartContainer = document.getElementById('chart-container');
-const table = document.getElementById('lostitem-table');
+/* -----------------------------
+    버튼 동작 (표/그래프 전환)
+------------------------------*/
+const mainBtn = document.getElementById("toggle-main-chart");
+const regBtn = document.getElementById("toggle-reg-chart");
+const table = document.getElementById("lostitem-table");
 
-toggleBtn.addEventListener('click', () => {
-    if (chartContainer.style.display === 'none') {
-        chartContainer.style.display = 'block';
-        table.style.display = 'none';
-    } else {
-        chartContainer.style.display = 'none';
-        table.style.display = 'table';
-    }
-});
+const mainChartBox = document.getElementById("chart-main");
+const regChartBox = document.getElementById("chart-reg");
 
-// JSON 데이터 읽기
-const reports = JSON.parse(document.getElementById('reports-data').textContent);
+mainBtn.onclick = () => {
+    mainChartBox.style.display = "block";
+    regChartBox.style.display = "none";
+    table.style.display = "none";
+};
+regBtn.onclick = () => {
+    mainChartBox.style.display = "none";
+    regChartBox.style.display = "block";
+    table.style.display = "none";
+};
+
+/* -----------------------------
+    데이터 준비
+------------------------------*/
+const reports = JSON.parse(document.getElementById("reports-data").textContent);
 
 // 날짜
 const dates = reports.map(r => r.date);
@@ -82,10 +100,9 @@ const dates = reports.map(r => r.date);
 // 분실물 총합
 const lostTotal = reports.map(r => {
     let sum = 0;
-    for (const [key, val] of Object.entries(r)) {
-        if (key != 'date' && key != 'avg_temp' && key != 'rain_mm' && key != 'is_rainy') {
-            sum += Number(val);
-        }
+    for (const [k, v] of Object.entries(r)) {
+        if (!["date","avg_temp","rain_mm","is_rainy"].includes(k))
+            sum += Number(v);
     }
     return sum;
 });
@@ -94,30 +111,83 @@ const lostTotal = reports.map(r => {
 const avgTemps = reports.map(r => parseFloat(r.avg_temp) || 0);
 const rainMms = reports.map(r => parseFloat(r.rain_mm) || 0);
 
-// 그래프 생성
-const ctx = document.getElementById('lostitem-chart').getContext('2d');
-new Chart(ctx, {
+/* -----------------------------
+  ① 기존 상관관계 그래프
+------------------------------*/
+new Chart(document.getElementById("lostitem-chart"), {
     data: {
         labels: dates,
         datasets: [
-            { type:'bar', label:'분실물 총합', data: lostTotal, backgroundColor:'#4CAF50', yAxisID:'yLeft' },
-            { type:'line', label:'평균기온 (℃)', data: avgTemps, borderColor:'red', backgroundColor:'red', yAxisID:'yRight', tension:0.2, fill:false, pointRadius:3 },
-            { type:'line', label:'강수량 (mm)', data: rainMms, borderColor:'blue', backgroundColor:'blue', yAxisID:'yRight', tension:0.2, fill:false, pointRadius:3 }
+            { type:'bar', label:'분실물 총합', data:lostTotal, backgroundColor:'#4CAF50', yAxisID:'yLeft' },
+            { type:'line', label:'평균기온', data:avgTemps, borderColor:'red', yAxisID:'yRight', tension:0.2 },
+            { type:'line', label:'강수량', data:rainMms, borderColor:'blue', yAxisID:'yRight', tension:0.2 }
         ]
     },
     options: {
         responsive:true,
         maintainAspectRatio:false,
-        interaction:{ mode:'index', intersect:false },
-        plugins:{ title:{ display:true, text:'날씨와 분실물 개수 상관관계' }, legend:{ position:'bottom' } },
+        plugins:{ legend:{ position:'bottom' } },
         scales:{
-            yLeft:{ type:'linear', position:'left', beginAtZero:true, title:{ display:true, text:'분실물 개수' } },
-            yRight:{ type:'linear', position:'right', beginAtZero:true, title:{ display:true, text:'평균기온 / 강수량' }, grid:{ drawOnChartArea:false } },
-            x:{ stacked:false }
+            yLeft: { beginAtZero:true, position:'left' },
+            yRight: { beginAtZero:true, position:'right', grid:{ drawOnChartArea:false } }
+        }
+    }
+});
+
+/* -----------------------------
+  ② 선형회귀 계산 함수
+------------------------------*/
+function linearRegression(x, y) {
+    const n = x.length;
+    const sumX = x.reduce((a,b) => a+b, 0);
+    const sumY = y.reduce((a,b) => a+b, 0);
+    const sumXY = x.reduce((a,b,i) => a + b * y[i], 0);
+    const sumX2 = x.reduce((a,b) => a + b*b, 0);
+
+    const slope = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX);
+    const intercept = (sumY - slope*sumX) / n;
+
+    return { slope, intercept };
+}
+
+const { slope, intercept } = linearRegression(rainMms, lostTotal);
+
+// 회귀선 y = ax + b
+const regLine = rainMms.map(r => slope * r + intercept);
+
+/* -----------------------------
+  ③ 선형회귀 그래프 생성
+------------------------------*/
+new Chart(document.getElementById("reg-chart"), {
+    type:'scatter',
+    data:{
+        labels: rainMms,
+        datasets:[
+            {
+                type:'scatter',
+                label:'관측값',
+                data: rainMms.map((r,i)=>({x:r,y:lostTotal[i]})),
+                backgroundColor:'blue'
+            },
+            {
+                type:'line',
+                label:'회귀선',
+                data: rainMms.map((r,i)=>({x:r,y:regLine[i]})),
+                borderColor:'red',
+                fill:false
+            }
+        ]
+    },
+    options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{ legend:{ position:'bottom' } },
+        scales:{
+            x:{ title:{ display:true, text:"강수량 (mm)" } },
+            y:{ title:{ display:true, text:"분실물 개수" }, beginAtZero:true }
         }
     }
 });
 </script>
-
 </body>
 </html>
