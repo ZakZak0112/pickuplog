@@ -11,6 +11,8 @@ from django.shortcuts import render
 
 from django.shortcuts import render
 import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
 from main.models import LostItem, WeatherDaily, RidershipDaily, StationDict
 
 # 프로젝트 모델 임포트
@@ -395,18 +397,21 @@ def insight_report(request):
 
 #날씨별, 노선별, 역별 분실물 + 승하차 인원 집계 뷰
 def lostitem_analysis_view(request):
-    # 1) LostItem 데이터 불러오기
-    lostitems = LostItem.objects.all().values('registered_at', 'category')
+        # -----------------------------
+    # 1) LostItem 불러오기
+    # -----------------------------
+    lostitems = LostItem.objects.all().values(
+        'registered_at', 'category'
+    )
     lost_df = pd.DataFrame(lostitems)
 
     if lost_df.empty:
         return render(request, 'main/analysis.html', {'reports': []})
 
-    # 날짜만 추출 & Null category 처리
     lost_df['date'] = pd.to_datetime(lost_df['registered_at']).dt.date
     lost_df['category'] = lost_df['category'].fillna('기타')
 
-    # 2) 날짜별, 분실물 종류별 개수 집계 (피벗)
+    # 날짜별 + 카테고리별 pivot
     pivot_df = lost_df.pivot_table(
         index='date',
         columns='category',
@@ -415,20 +420,20 @@ def lostitem_analysis_view(request):
         fill_value=0
     ).reset_index()
 
-    # 컬럼 이름 초기화 (템플릿에서 편하게 사용)
     pivot_df.columns.name = None
 
-    # 3) WeatherDaily 불러오기
+    # -----------------------------
+    # 2) WeatherDaily 불러오기
+    # -----------------------------
     weather = WeatherDaily.objects.all().values(
-        'date',
-        'is_rainy',
-        'rain_mm',
-        'avg_temp'
+        'date', 'is_rainy', 'rain_mm', 'avg_temp'
     )
     weather_df = pd.DataFrame(weather)
     weather_df['date'] = pd.to_datetime(weather_df['date']).dt.date
 
-    # 4) 날씨 + 분실물 merge
+    # -----------------------------
+    # 3) Merge (날씨 + 분실물)
+    # -----------------------------
     final_df = pd.merge(
         weather_df,
         pivot_df,
@@ -436,10 +441,72 @@ def lostitem_analysis_view(request):
         how='left'
     ).fillna(0)
 
+    # 총 분실물 계산
+    category_cols = [
+        c for c in final_df.columns
+        if c not in ['date', 'rain_mm', 'avg_temp', 'is_rainy']
+    ]
+
+    final_df['total_lost'] = final_df[category_cols].sum(axis=1)
+
     # 최신순 정렬
     final_df = final_df.sort_values('date', ascending=False)
 
-    # HTML로 전달
+    # -----------------------------
+    # 4) 회귀 분석 (강수량 → 분실물 총합)
+    # -----------------------------
+    rain_list = final_df['rain_mm'].astype(float).tolist()
+    lost_list = final_df['total_lost'].astype(int).tolist()
+
+    X = np.array(rain_list).reshape(-1, 1)
+    y = np.array(lost_list)
+
+    # 선형 회귀 모델
+    model = LinearRegression()
+    model.fit(X, y)
+
+    # 회귀선용 Y 계산
+    x_line = np.linspace(min(rain_list), max(rain_list), 50).reshape(-1, 1)
+    y_line = model.predict(x_line)
+
+    regression_line = [
+        {'x': float(x_line[i][0]), 'y': float(y_line[i])}
+        for i in range(len(x_line))
+    ]
+
+    # -----------------------------
+    # 5) 집단별 통계 계산
+    # -----------------------------
+    stats = {
+        'rain_mm': {
+            'mean': round(final_df['rain_mm'].mean(), 2),
+            'std': round(final_df['rain_mm'].std(), 2),
+            'median': round(final_df['rain_mm'].median(), 2),
+            'count': int(final_df['rain_mm'].count()),
+        },
+        'avg_temp': {
+            'mean': round(final_df['avg_temp'].mean(), 2),
+            'std': round(final_df['avg_temp'].std(), 2),
+            'median': round(final_df['avg_temp'].median(), 2),
+            'count': int(final_df['avg_temp'].count()),
+        },
+        'total_lost': {
+            'mean': round(final_df['total_lost'].mean(), 2),
+            'std': round(final_df['total_lost'].std(), 2),
+            'median': round(final_df['total_lost'].median(), 2),
+            'count': int(final_df['total_lost'].count()),
+        },
+    }
+
+    # -----------------------------
+    # 6) 템플릿 전달
+    # -----------------------------
     reports = final_df.to_dict(orient='records')
 
-    return render(request, 'main/analysis.html', {'reports': reports})
+    return render(request, 'main/analysis.html', {
+        'reports': reports,
+        'rain_list': rain_list,
+        'lost_list': lost_list,
+        'regression_line': regression_line,
+        'stats': stats,
+    })
