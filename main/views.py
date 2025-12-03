@@ -13,6 +13,8 @@ from django.shortcuts import render
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
 from main.models import LostItem, WeatherDaily, RidershipDaily, StationDict
 
 # 프로젝트 모델 임포트
@@ -204,56 +206,53 @@ def home(request):
 # ----------------------------------------------------------------------
 # 3. Archive View (분실물 데이터 아카이빙)
 # ----------------------------------------------------------------------
-
 def lostitem_list(request):
     """
     LostItem 데이터를 조회하고 검색/필터링을 적용하는 뷰.
     """
     form = LostItemSearchForm(request.GET)
-    queryset = LostItem.objects.all().order_by('-registered_at') # 기본은 최신 등록 순
+    queryset = LostItem.objects.all().order_by('-registered_at')  # select_related 제거
+    page_size = 30
 
-    page_size = 30 
-
-    # 1. 필터링 로직
+    # 1. 필터링
     if form.is_valid():
         data = form.cleaned_data
         
-        if data['q']:
+        if data.get('q'):
             queryset = queryset.filter(
                 Q(item_name__icontains=data['q']) |
                 Q(description__icontains=data['q']) |
                 Q(station__icontains=data['q'])
             )
 
-        if data['transport']:
+        if data.get('transport'):
             queryset = queryset.filter(transport=data['transport'])
 
-        if data['status']:
+        if data.get('status'):
             queryset = queryset.filter(status=data['status'])
-            
-        if data['only_unreceived']: 
-            queryset = queryset.filter(is_received=False)
-            
-        if data['category']:
-             queryset = queryset.filter(category__in=data['category'])
 
-        if data['date_from']:
+        if data.get('only_unreceived'):
+            queryset = queryset.filter(is_received=False)
+
+        if data.get('category'):
+            queryset = queryset.filter(category__in=data['category'])
+
+        if data.get('date_from'):
             queryset = queryset.filter(registered_at__gte=data['date_from'])
-        if data['date_to']:
+
+        if data.get('date_to'):
             end_date = data['date_to'] + timedelta(days=1)
             queryset = queryset.filter(registered_at__lt=end_date)
-            
-        if data['sort']:
-            if data['sort'] == 'registered_at_asc':
-                queryset = queryset.order_by('registered_at')
-            elif data['sort'] == 'views_desc':
-                 queryset = queryset.order_by('-views')
 
-        raw_page_size = data.get('page_size', 30)
-        
+        if data.get('sort') == 'registered_at_asc':
+            queryset = queryset.order_by('registered_at')
+        elif data.get('sort') == 'views_desc':
+            queryset = queryset.order_by('-views')
+
+        # page_size 안전 처리
         try:
-            page_size = int(raw_page_size) if raw_page_size is not None else 30
-        except ValueError:
+            page_size = int(data.get('page_size') or 30)
+        except (ValueError, TypeError):
             page_size = 30
 
     # 2. 페이지네이션
@@ -262,16 +261,12 @@ def lostitem_list(request):
 
     try:
         page_obj = paginator.page(page_number)
-    except EmptyPage:
-        page_obj = paginator.page(paginator.num_pages)
-    except:
+    except (EmptyPage, PageNotAnInteger):
         page_obj = paginator.page(1)
 
     # 3. 쿼리 스트링 생성
     url_query_string = request.GET.copy()
-    if 'page' in url_query_string:
-        del url_query_string['page']
-    
+    url_query_string.pop('page', None)
     url_query_string = f"&{url_query_string.urlencode()}" if url_query_string else ""
 
     context = {
@@ -279,12 +274,10 @@ def lostitem_list(request):
         'page_obj': page_obj,
         'url_query_string': url_query_string,
         'total_count': queryset.count(),
-        'items': queryset,
+        'items': page_obj.object_list,  # 전체 쿼리셋 대신 현재 페이지 아이템만 전달
     }
-    
+
     return render(request, 'main/lostitem_list.html', context)
-
-
 # ----------------------------------------------------------------------
 # 4. 분석 결과 뷰 (trend, correlation, insight)
 # ----------------------------------------------------------------------
