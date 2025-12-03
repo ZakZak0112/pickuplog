@@ -5,9 +5,11 @@
     <title>분실물 분석</title>
 
     <style>
+        body { font-family: "Malgun Gothic", sans-serif; margin: 20px; background: #f9f9f9; }
+        h2 { text-align: center; color: #333; }
         .hidden-section { display: none; margin-top: 20px; }
         .toggle-btn {
-            margin-right: 10px;
+            margin: 5px;
             padding: 8px 16px;
             background: #4a76ff;
             border: none;
@@ -19,10 +21,14 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
+            background-color: #fff;
         }
         table, th, td { border: 1px solid #ccc; }
         th { background: #f0f0f0; }
         th, td { padding: 6px; text-align: center; }
+        td.highlight { background-color: #ffeb3b; }
+        tbody tr:nth-child(even) { background-color: #f2f2f2; }
+        tbody tr:hover { background-color: #e0f7fa; }
     </style>
 
     <!-- Chart.js CDN -->
@@ -42,7 +48,6 @@
 <!-- ---------------- 1. 데이터 테이블 ---------------- -->
 <div id="table-section" class="hidden-section">
     <h3>📅 날짜별 분석 테이블</h3>
-
     <table>
         <thead>
             <tr>
@@ -59,7 +64,6 @@
                 {% endfor %}
             </tr>
         </thead>
-
         <tbody>
         {% for row in reports %}
             <tr>
@@ -67,15 +71,11 @@
                 <td>{{ row.rain_mm }}</td>
                 <td>{{ row.is_rainy }}</td>
                 <td>{{ row.avg_temp }}</td>
-                <td>
-                    {{
-                        row|get_total_lost:"date,avg_temp,rain_mm,is_rainy"
-                    }}
-                </td>
+                <td>{{ row.total_lost }}</td>
 
                 {% for key, value in row.items %}
                     {% if key not in 'date,avg_temp,rain_mm,is_rainy,total_lost' %}
-                        <td>{{ value }}</td>
+                        <td {% if value != 0 %} class="highlight" {% endif %}>{{ value }}</td>
                     {% endif %}
                 {% endfor %}
             </tr>
@@ -120,17 +120,16 @@
 </div>
 
 <script>
-/* ---------------- 버튼으로 영역 보이기 ---------------- */
+/* ---------------- 버튼 토글 ---------------- */
 function toggleSection(id) {
-    document.getElementById(id).style.display =
-        document.getElementById(id).style.display === "block"
-            ? "none"
-            : "block";
+    const el = document.getElementById(id);
+    el.style.display = el.style.display === "block" ? "none" : "block";
 }
 
 /* ---------------- 회귀 그래프 ---------------- */
 const rainData = {{ rain_list|safe }};
 const lostData = {{ lost_list|safe }};
+const regressionLine = {{ regression_line|safe }};
 
 const ctx = document.getElementById('rainLostRegression').getContext('2d');
 new Chart(ctx, {
@@ -139,15 +138,26 @@ new Chart(ctx, {
         datasets: [
             {
                 label: '강수량 vs 분실물',
-                data: rainData.map((v, i) => ({ x: v, y: lostData[i] })),
+                data: rainData.map((v,i) => ({ x:v, y:lostData[i] })),
+                backgroundColor: 'rgba(54, 162, 235, 0.6)'
             },
             {
                 label: '회귀선',
                 type: 'line',
-                data: {{ regression_line|safe }},
-                borderWidth: 2
+                data: regressionLine,
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 2,
+                fill: false,
+                showLine: true,
+                pointRadius: 0
             }
         ]
+    },
+    options: {
+        scales: {
+            x: { title: { display: true, text: '강수량 (mm)' } },
+            y: { title: { display: true, text: '총 분실물 수' } }
+        }
     }
 });
 </script>
