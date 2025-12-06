@@ -37,8 +37,9 @@
             width: 100%;
         }
 
-        #subway svg {
+        #subway{
             transform: scale(0.6);  /* 60% 크기 */
+            height: 200px;
             transform-origin: top center; /* 줄어들 때 기준점 조정 */
             display: block;
             margin: 0 auto;  /* 가운데 정렬 */
@@ -47,6 +48,24 @@
         #toggle-weather {
             text-align: center; 
         }
+        
+        #stats-line {
+            margin: 20px auto 0 auto;
+        }
+
+        .stats-box {
+            display: inline-block;
+            width: 200px;   /* 박스 너비 */
+            height: 134;           
+            padding: 20px;             /* 안쪽 여백 */
+            background-color: rgba(0,0,0,0.6); /* 반투명 배경 */
+            color: #fff;               /* 글자색 흰색 */
+            border-radius: 10px;       /* 둥근 모서리 */
+            text-align: center;        /* 가운데 정렬 */
+            font-family: Arial, sans-serif;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); /* 그림자 */
+        }
+        
     </style>
 
     <!-- Chart.js CDN -->
@@ -277,9 +296,20 @@
                 </defs>
                 
             </svg>
-
-
-
+        </div>
+        <div id="stats-line"> <!-- 값 표시 -->
+            <div class="stats-box">
+                <p>오늘 탑승 인원</p>
+                <p><span id="num-people"></span>명</p>
+            </div>
+            <div class="stats-box">
+                <p>분실물 개수</p>
+                <p><span id="num-lostitem"></span>개</p>
+            </div>
+            <div class="stats-box">
+                <p>강수</p>
+                <p id="num-rain"></p>
+            </div>
         </div>
     </div>
 
@@ -289,10 +319,16 @@
         let parts = date.match(/\d+/g); 
         let date_formatted = `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
         const totalBoardings = {{ total_boardings|safe }};
-        const NUM_PEOPLE = totalBoardings[date_formatted] / 1000000;
+        const NUM_PEOPLE_boardings = totalBoardings[date_formatted] / 1000000;
+        const totalAlightings = {{total_alightings|safe}};
+        const NUM_PEOPLE_alightings = totalAlightings[date_formatted]
+        let NUM_PEOPLE = NUM_PEOPLE_boardings * 1000000 + NUM_PEOPLE_alightings;
         let lostitems = {{recent_sunny_lostitem}};
 
         document.getElementById('current-date').textContent = date;
+        document.getElementById('num-people').textContent = NUM_PEOPLE.toLocaleString();
+        document.getElementById('num-lostitem').textContent = lostitems.toLocaleString();
+        document.getElementById('num-rain').textContent = "맑음";
 
         const ENTER_SPEED = 15;        // 기본 이동 속도
         const WAIT_TIME = 1500;       // 내부 대기 시간 (ms)
@@ -302,7 +338,7 @@
 
         const ENTER_TARGET_MIN = 250;  // 지하철 내부 좌측
         const ENTER_TARGET_MAX = 800;  // 지하철 내부 우측
-        // ---------------------------------
+        
         const scene = document.getElementById("scene");
 
         function createPerson() {
@@ -380,7 +416,7 @@
         }
 
         // N명 생성
-        for (let i = 0; i < NUM_PEOPLE; i++) {
+        for (let i = 0; i < NUM_PEOPLE_boardings; i++) {
             createPerson(i);
         }
 
@@ -407,6 +443,7 @@
                 date = "{{recent_sunny}}";
                 lostitems = {{recent_sunny_lostitem}}; 
                 toggleBtn.textContent = "날씨 토글 ☀️➡️🌧️"
+                document.getElementById('num-rain').textContent = "맑음"
 
                 //이전 요소 지우기
                 dropBag(true);
@@ -414,7 +451,7 @@
                 people.forEach(people => people.remove());
 
                 //사람 생성
-                for (let i = 0; i < NUM_PEOPLE; i++) { 
+                for (let i = 0; i < NUM_PEOPLE_boardings; i++) { 
                     createPerson(i);
                 }
             } 
@@ -433,6 +470,7 @@
                 date = "{{recent_rainy}}";
                 lostitems = {{recent_rainy_lostitem}};
                 toggleBtn.textContent = "날씨 토글 🌧️➡️☀️"
+                document.getElementById('num-rain').textContent = {{recent_rain_mm}} + "mm"
 
                 //이전 요소 지우기
                 dropBag(true);
@@ -440,7 +478,7 @@
                 people.forEach(people => people.remove());
 
                 //사람 생성
-                for (let i = 0; i < NUM_PEOPLE; i++) {
+                for (let i = 0; i < NUM_PEOPLE_boardings; i++) {
                     createPerson(i);
                 }
             }
