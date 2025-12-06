@@ -454,10 +454,15 @@ def lostitem_analysis_view(request):
     bus_df = pd.DataFrame(list(bus_qs))
 
     #버스+지하철 통합 승하차 인원
-    boarding_df = pd.merge(bus_df, ridership_df, on='date', how='outer').fillna(0)
-    boarding_df['total_boardings'] = boarding_df['bus_boardings'] + boarding_df['subway_boardings']
-    boarding_df['date_str'] = boarding_df['date'].astype(str)
-    total_boardings_dict = {row['date_str']: row['total_boardings'] for _, row in boarding_df.iterrows()}
+    boardings_df = pd.merge(bus_df, ridership_df, on='date', how='outer').fillna(0)
+    boardings_df['total_boardings'] = boardings_df['bus_boardings'] + boardings_df['subway_boardings']
+    boardings_df['date_str'] = boardings_df['date'].astype(str)
+    total_boardings_dict = {row['date_str']: row['total_boardings'] for _, row in boardings_df.iterrows()}
+    
+    alightings_df = pd.merge(bus_df, ridership_df, on='date', how='outer').fillna(0)
+    alightings_df['total_alightings'] = alightings_df['bus_alightings'] + alightings_df['subway_alightings']
+    alightings_df['date_str'] = alightings_df['date'].astype(str)
+    total_alightings_dict = {row['date_str']: row['total_alightings'] for _, row in alightings_df.iterrows()}
 
     #날씨 + 분실물 + 지하철 승하차 인원
     final_df = pd.merge(
@@ -545,11 +550,10 @@ def lostitem_analysis_view(request):
             if reports[i]['is_rainy']:
                 recent_rainy = reports[i]['date']
                 recent_rainy_lostitem = reports[i]['total_lost']
-                print(f"recent rainy day: {recent_rainy}")
+                recent_rain_mm = reports[i]['rain_mm']
             elif not reports[i]['is_rainy']:
                 recent_sunny = reports[i]['date']
                 recent_sunny_lostitem = reports[i]['total_lost']
-                print(f"recent sunny day: {recent_sunny}")
         i += 1
 
     return render(request, 'main/analysis.html', {
@@ -559,8 +563,10 @@ def lostitem_analysis_view(request):
         'regression_line': regression_line,
         'stats': stats,
         'total_boardings': json.dumps(total_boardings_dict),
+        'total_alightings': json.dumps(total_alightings_dict),
         'recent_rainy': recent_rainy,
         'recent_sunny': recent_sunny,
         'recent_rainy_lostitem': recent_rainy_lostitem,
-        'recent_sunny_lostitem': recent_sunny_lostitem
+        'recent_sunny_lostitem': recent_sunny_lostitem,
+        'recent_rain_mm': recent_rain_mm
     })
