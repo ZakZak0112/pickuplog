@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages 
 from django.db import IntegrityError 
 from django.http import HttpResponse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from django.shortcuts import render
 
 from django.shortcuts import render
@@ -16,6 +16,8 @@ from sklearn.linear_model import LinearRegression
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
 from main.models import LostItem, WeatherDaily, RidershipDaily, BusDaily
+
+import json
 
 # 프로젝트 모델 임포트
 from .models import LostItem, RidershipDaily, RainImpactReport, WeatherDaily 
@@ -428,9 +430,8 @@ def lostitem_analysis_view(request):
     ridership_qs = (RidershipDaily.objects
                     .values('date')
                     .annotate(
-                        subway_boarding=Sum('boardings'),
-                        subway_alightings=Sum('alightings'),
-                        subway_sums=Sum('total')
+                        subway_boardings=Sum('boardings'),
+                        subway_alightings=Sum('alightings')
                     )
                     .order_by('date')
     )
@@ -444,13 +445,19 @@ def lostitem_analysis_view(request):
     bus_qs = (BusDaily.objects
               .values('date')
               .annotate(
-                  bus_boaring = Sum('ride_on'),
+                  bus_boardings = Sum('ride_on'),
                   bus_alightings = Sum('ride_off')
               )
               .order_by('date')
             )
 
     bus_df = pd.DataFrame(list(bus_qs))
+
+    #버스+지하철 통합 승하차 인원
+    boarding_df = pd.merge(bus_df, ridership_df, on='date', how='outer').fillna(0)
+    boarding_df['total_boardings'] = boarding_df['bus_boardings'] + boarding_df['subway_boardings']
+    boarding_df['date_str'] = boarding_df['date'].astype(str)
+    total_boardings_dict = {row['date_str']: row['total_boardings'] for _, row in boarding_df.iterrows()}
 
     #날씨 + 분실물 + 지하철 승하차 인원
     final_df = pd.merge(
@@ -530,10 +537,30 @@ def lostitem_analysis_view(request):
     ##6) 템플릿 전달
     reports = final_df.to_dict(orient='records')
 
+    recent_rainy = 0
+    recent_sunny = 0
+    i = 0
+    while recent_rainy == 0 or recent_sunny == 0:
+        if reports[i]['total_lost'] > 0 and reports[i]['subway_boardings'] > 0 and reports[i]['bus_boardings'] > 0:
+            if reports[i]['is_rainy']:
+                recent_rainy = reports[i]['date']
+                recent_rainy_lostitem = reports[i]['total_lost']
+                print(f"recent rainy day: {recent_rainy}")
+            elif not reports[i]['is_rainy']:
+                recent_sunny = reports[i]['date']
+                recent_sunny_lostitem = reports[i]['total_lost']
+                print(f"recent sunny day: {recent_sunny}")
+        i += 1
+
     return render(request, 'main/analysis.html', {
         'reports': reports,
         'rain_list': rain_list,
         'lost_list': lost_list,
         'regression_line': regression_line,
         'stats': stats,
+        'total_boardings': json.dumps(total_boardings_dict),
+        'recent_rainy': recent_rainy,
+        'recent_sunny': recent_sunny,
+        'recent_rainy_lostitem': recent_rainy_lostitem,
+        'recent_sunny_lostitem': recent_sunny_lostitem
     })
