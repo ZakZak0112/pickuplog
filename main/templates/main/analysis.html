@@ -29,6 +29,20 @@
         td.highlight { background-color: #ffeb3b; }
         tbody tr:nth-child(even) { background-color: #f2f2f2; }
         tbody tr:hover { background-color: #e0f7fa; }
+
+        #visualization-section {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
+        #subway svg {
+            transform: scale(0.6);  /* 60% 크기 */
+            transform-origin: top center; /* 줄어들 때 기준점 조정 */
+            display: block;
+            margin: 0 auto;  /* 가운데 정렬 */
+        }
+
     </style>
 
     <!-- Chart.js CDN -->
@@ -42,11 +56,12 @@
 <button class="toggle-btn" onclick="toggleSection('table-section')">분석 테이블 보기</button>
 <button class="toggle-btn" onclick="toggleSection('regression-section')">강수량-분실물 회귀 그래프</button>
 <button class="toggle-btn" onclick="toggleSection('stats-section')">집단별 통계 보기</button>
+<button class="toggle-btn" onclick="toggleSection('visualization-section')">시각화 보기</button>
 
 <hr>
 
 <!-- ---------------- 1. 데이터 테이블 ---------------- -->
-<div id="table-section" class="hidden-section">
+<div id="table-section" class="hidden-section"> 
     <h3>📅 날짜별 분석 테이블</h3>
     <table>
         <thead>
@@ -119,47 +134,233 @@
     </ul>
 </div>
 
+<!--시각화 섹션-->
+<div id="visualization-section" class="hidden-section">
+    <div id="subway">
+        <svg
+            id="scene"
+            width="1200"
+            height="350"
+            viewBox="0 0 1200 350"
+            xmlns="http://www.w3.org/2000/svg"
+            style="border-radius: 45px; box-shadow: 0 10px 25px rgba(0,0,0,0.08)"
+        >
+
+            <!-- 전체 배경 (프레임) -->
+            <rect x="0" y="0" width="1200" height="350" rx="45" fill="#d8dee6" />
+
+            <!-- 창문 영역 -->
+            <rect x="0" y="0" width="1200" height="260" rx="45" fill="#c9dff2" />
+            <rect x="0" y="0" width="1200" height="260" rx="45" fill="rgba(255,255,255,0.25)" />
+
+            <!-- 각 창문 패널 구분(옅은 기둥) -->
+            <rect x="150" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
+            <rect x="300" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
+            <rect x="450" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
+            <rect x="600" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
+            <rect x="750" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
+            <rect x="900" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
+            <rect x="1050" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
+
+            <!-- 상단 손잡이 바 -->
+            <rect x="50" y="70" width="1100" height="10" fill="#8a93a3" opacity="0.7" />
+
+            <!-- 손잡이들 (정확히 React 스타일로 배치) -->
+            <g stroke="#8a93a3" stroke-width="5" opacity="0.7" fill="none">
+                <line x1="200" x2="200" y1="80" y2="120" />
+                <circle cx="200" cy="140" r="18" />
+
+                <line x1="350" x2="350" y1="80" y2="120" />
+                <circle cx="350" cy="140" r="18" />
+
+                <line x1="500" x2="500" y1="80" y2="120" />
+                <circle cx="500" cy="140" r="18" />
+
+                <line x1="650" x2="650" y1="80" y2="120" />
+                <circle cx="650" cy="140" r="18" />
+
+                <line x1="800" x2="800" y1="80" y2="120" />
+                <circle cx="800" cy="140" r="18" />
+
+                <line x1="950" x2="950" y1="80" y2="120" />
+                <circle cx="950" cy="140" r="18" />
+            </g>
+
+            <!-- 바닥 영역 -->
+            <rect x="0" y="260" width="1200" height="90" fill="#c7cdd7" />
+
+            <!--사람 이미지-->
+            <defs>
+                <g id="person" fill="#616b7a">
+                    
+                    <!-- 머리 -->
+                    <circle cx="40" cy="25" r="12" />
+
+                    <!-- 반원(어깨 부분) -->
+                    <path d="
+                    M 20 55
+                    Q 40 35 60 55
+                    Z
+                    " />
+
+                    <!-- 몸통 직사각형 -->
+                    <rect x="20" y="55" width="40" height="45" />
+
+                </g>
+            </defs>
+
+            <defs>
+                <g id="bag">
+                <!-- 가방 몸통 -->
+                <rect x="30" y="50" width="140" height="80" rx="10" ry="10" fill="#8B4513" />
+
+                <!-- 가방 덮개 -->
+                <rect x="30" y="40" width="140" height="20" rx="5" ry="5" fill="#8B4513" />
+
+                <!-- 손잡이 -->
+                <path d="M 60 40 Q 100 10 140 40" stroke="#8B4513" stroke-width="6" fill="none" />
+                </g>
+            </defs>
+            
+        </svg>
+
+
+
+    </div>
+</div>
+
+
 <script>
-/* ---------------- 버튼 토글 ---------------- */
-function toggleSection(id) {
-    const el = document.getElementById(id);
-    el.style.display = el.style.display === "block" ? "none" : "block";
-}
-
-/* ---------------- 회귀 그래프 ---------------- */
-const rainData = {{ rain_list|safe }};
-const lostData = {{ lost_list|safe }};
-const regressionLine = {{ regression_line|safe }};
-
-const ctx = document.getElementById('rainLostRegression').getContext('2d');
-new Chart(ctx, {
-    type: 'scatter',
-    data: {
-        datasets: [
-            {
-                label: '강수량 vs 분실물',
-                data: rainData.map((v,i) => ({ x:v, y:lostData[i] })),
-                backgroundColor: 'rgba(54, 162, 235, 0.6)'
-            },
-            {
-                label: '회귀선',
-                type: 'line',
-                data: regressionLine,
-                borderColor: 'rgba(255, 99, 132, 1)',
-                borderWidth: 2,
-                fill: false,
-                showLine: true,
-                pointRadius: 0
-            }
-        ]
-    },
-    options: {
-        scales: {
-            x: { title: { display: true, text: '강수량 (mm)' } },
-            y: { title: { display: true, text: '총 분실물 수' } }
-        }
+    /* ---------------- 버튼 토글 ---------------- */
+    function toggleSection(id) {
+        const el = document.getElementById(id);
+        el.style.display = el.style.display === "block" ? "none" : "block";
     }
-});
+
+    /* ---------------- 회귀 그래프 스크립트 ---------------- */
+    const rainData = {{ rain_list|safe }};
+    const lostData = {{ lost_list|safe }};
+    const regressionLine = {{ regression_line|safe }};
+
+    const ctx = document.getElementById('rainLostRegression').getContext('2d');
+    new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [
+                {
+                    label: '강수량 vs 분실물',
+                    data: rainData.map((v,i) => ({ x:v, y:lostData[i] })),
+                    backgroundColor: 'rgba(54, 162, 235, 0.6)'
+                },
+                {
+                    label: '회귀선',
+                    type: 'line',
+                    data: regressionLine,
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 2,
+                    fill: false,
+                    showLine: true,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: '강수량 (mm)' } },
+                y: { title: { display: true, text: '총 분실물 수' } }
+            }
+        }
+    });
+</script>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+    // ------------ 설정값 -------------
+    const NUM_PEOPLE = 5;        // 사람 수
+    const ENTER_SPEED = 10;        // 기본 이동 속도
+    const WAIT_TIME = 1500;       // 내부 대기 시간 (ms)
+
+    const START_X = -100;         // 사람 이미지 시작점
+    const END_X = 1400;           // 나가는 최종 지점
+
+    const ENTER_TARGET_MIN = 250;  // 지하철 내부 좌측
+    const ENTER_TARGET_MAX = 800;  // 지하철 내부 우측
+    // ---------------------------------
+
+    const scene = document.getElementById("scene");
+
+    function createPerson() {
+        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+        use.setAttribute("href", "#person");  // defs 안에 정의한 id
+
+        // 초기 위치 (transform 쓰지 않음!)
+        use.setAttribute("x", START_X);
+        use.setAttribute("y", 200 + Math.random() * 30); // 약간 다른 세로 위치
+
+        scene.appendChild(use);
+
+        // 목표 지점도 랜덤
+        const targetX = Math.random() * (ENTER_TARGET_MAX - ENTER_TARGET_MIN) + ENTER_TARGET_MIN;
+
+        // 약간씩 다른 시작 지연
+        const startDelay = Math.random() * 300;
+
+        setTimeout(() => moveIn(use, targetX), startDelay);
+    }
+    
+    const MIN_X = 300;    // 최소 x 좌표
+    const MAX_X = 600;  // 최대 x 좌표
+    const FIXED_Y = 270; // y 고정
+    const SCALE = 0.3;
+    
+    function dropBag() {
+        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+        use.setAttribute("href", "#bag");  // defs 안에 정의한 id
+
+        const randomX = MIN_X + Math.random() * (MAX_X - MIN_X);
+        use.setAttribute("transform", `translate(${randomX},${FIXED_Y}) scale(${SCALE})`);
+
+        scene.appendChild(use);
+    }
+
+    function moveIn(img, targetX) {
+        function step() {
+            let x = parseFloat(img.getAttribute("x"));
+            if (x < targetX) {
+                // 사람마다 다르게: 속도 약간 랜덤 구성
+                const speed = ENTER_SPEED + Math.random() * 1.2;
+                img.setAttribute("x", x + speed);
+                requestAnimationFrame(step);
+            } else {
+                //분실물 흘리기
+                dropBag();
+                // 도착 → 내부 대기
+                setTimeout(() => moveOut(img), WAIT_TIME);
+            }
+        }
+        step();
+    }
+
+    function moveOut(img) {
+        function step() {
+            let x = parseFloat(img.getAttribute("x"));
+            if (x < END_X) {
+                const speed = ENTER_SPEED + Math.random() * 1.2;
+                img.setAttribute("x", x + speed);
+                requestAnimationFrame(step);
+            } else {
+                img.remove(); // 화면에서 제거
+            }
+        }
+        step();
+    }
+
+    // N명 생성
+    for (let i = 0; i < NUM_PEOPLE; i++) {
+        createPerson(i);
+    }
+
 </script>
 
 </body>
