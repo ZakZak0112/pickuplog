@@ -50,7 +50,7 @@
         }
         
         #stats-line {
-            margin: 20px auto 0 auto;
+            margin: 20px auto 20px auto;
         }
 
         .stats-box {
@@ -66,6 +66,55 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.5); /* 그림자 */
         }
         
+        #actDiv {
+            margin: 20px auto 100px auto;
+            text-align: center;
+        }
+
+        #act {
+            display: inline-block;       /* 내용에 맞게 크기 조정 */
+            padding: 5px 20px;          /* 위아래 10px, 좌우 20px 여백 */
+            margin: 5px auto 0px auto;
+            background-color: #4a76ff;   /* 박스 배경색 */
+            color: white;                /* 글자색 */
+            border-radius: 15px;         /* 둥근 모서리 */
+            font-size: 16px;              /* 글자 크기 */
+            font-family: Arial, sans-serif;
+        }
+
+        #context-3 {
+            margin: 20px auto 0 auto;
+        }
+
+        .button {
+            padding: 10px 20px;        /* 높이와 좌우 여백 */
+            border-radius: 25px / 50%; /* 양옆만 둥글게 */
+            border: none;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.3s, opacity 0.3s;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+        }
+
+        #before-btn {
+            background-color: #4a76ff;
+            opacity: 0.6; /* 흐리게 */
+        }
+
+        #before-btn:hover {
+            opacity: 0.8; /* 호버 시 조금 더 진하게 */
+        }
+
+        #next-btn {
+            background-color: #4a76ff; /* 파란색 */
+        }
+
+        #next-btn:hover {
+            background-color: #3a5dcc; /* 살짝 진하게 */
+        }
     </style>
 
     <!-- Chart.js CDN -->
@@ -311,6 +360,21 @@
                 <p id="num-rain"></p>
             </div>
         </div>
+        <div id="actDiv"> <!-- 가설증명 대화로그 -->
+            <div>
+                <p id="act">ACT.1 가설</p>
+            </div>
+            <div>
+                <h1 id="context-title">비가 오면 분실물이 많아질까?</h1>
+                <p id="context-1">비 오는 날은 짐도 많고 바닥도 미끄러워서 정신이 없죠. <br> 보통은 비 오는 날 분실물이 더 많을 거라고 생각합니다.</p>
+                <p id="context-2">(버튼을 눌러 날씨를 바꿔보세요. 분실물 양이 어떻게 변하나요?)</p>
+            </div>
+            <div id="context-3" style="width:400px;"></div>
+            <div>
+                <button id="before-btn" class="button">이전</button>
+                <button id="next-btn" class="button">다음으로</button>
+            </div>
+        </div>
     </div>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -486,6 +550,72 @@
             isRainy = !isRainy; // 상태 토글
             document.getElementById('current-date').textContent = date;
         });
+    </script>
+
+    <script src="https://cdn.plot.ly/plotly-3.3.0.min.js"></script>
+
+    <script>
+        //가설증명 대화
+        const beforeBtn = document.getElementById("before-btn");
+        const nextBtn = document.getElementById("next-btn");
+        let page = 0;
+
+        beforeBtn.addEventListener("click", () => { 
+            if (page > 0) {
+                page -= 1; 
+                pageChange();
+            }
+        })
+        nextBtn.addEventListener("click", () => { 
+            if (page < 3) {
+                page += 1; 
+                pageChange();
+            } 
+        })
+
+        const act = document.getElementById("act");
+        const context_title = document.getElementById("context-title");
+        const context_1 = document.getElementById("context-1");
+        const context_2 = document.getElementById('context-2');
+        const context_3 = document.getElementById('context-3');
+        function pageChange() {
+            if (page == 0) {
+                act.innerHTML = "ACT 1. 가설"
+                context_title.innerHTML = "비가 오면 우산 때문에 더 많이 잃어버릴까?"
+                context_1.innerHTML = "비 오는 날은 짐도 많고 바닥도 미끄러워서 정신이 없죠. <br> 보통은 비 오는 날 분실물이 더 많을 거라고 생각합니다."
+                context_2.innerHTML = "(버튼을 눌러 날씨를 바꿔보세요. 분실물 양이 어떻게 변하나요?)"
+                
+                context_3.style.height = '1px';
+                Plotly.purge('context-3')
+            }
+            else if (page == 1) {
+                act.innerHTML = "ACT 2. 데이터의 반전"
+                context_title.innerHTML = "사실은 맑은 날에 더 많이 잃어버립니다!"
+                context_1.innerHTML = "데이터를 분석해보니 맑은 날의 분실물 발생량이 23% 더 높았습니다. <br> 우리의 직관과는 정반대의 결과가 나온 것이죠."
+                //23% 변경 필요?
+                context_2.innerHTML = ""
+
+                const data = [{ //임시데이터
+                    x: ['비 오는 날','맑은 날'],
+                    y: [{{recent_rainy_lostitem}}, {{recent_sunny_lostitem}}],
+                    type: 'bar'
+                }];
+                const layout = {
+                    margin: { l: 30, r: 10, t: 10, b: 30 }  // left, right, top, bottom
+                };
+                context_3.style.height = '200px';
+                Plotly.newPlot('context-3', data, layout);
+            }
+            else {
+                act.textContent = "ACT 3. 결론"
+                context_title.innerHTML = "범인은 날씨가 아니라 '혼잡도'였습니다"
+                context_1.innerHTML = "비가 오면 사람들이 외출을 줄여 대중교통 이용객 자체가 줄어듭니다. <br> '사람이 적으면 → 분실물도 적다'는 단순한 진리였죠. <br> 날씨는 직접적인 원인이 아니라 간접적인 배경이었을 뿐입니다."
+                context_2.innerHTML = ""
+                
+                context_3.style.height = '1px';
+                Plotly.purge('context-3')
+            }
+        }
 
     </script>
 
