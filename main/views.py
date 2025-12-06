@@ -15,7 +15,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
-from main.models import LostItem, WeatherDaily, RidershipDaily, StationDict
+from main.models import LostItem, WeatherDaily, RidershipDaily, BusDaily
 
 # 프로젝트 모델 임포트
 from .models import LostItem, RidershipDaily, RainImpactReport, WeatherDaily 
@@ -436,7 +436,21 @@ def lostitem_analysis_view(request):
     )
     ridership_df=pd.DataFrame(list(ridership_qs))
 
-    #
+    #BusDaily 불러오기
+    bus = BusDaily.objects.values('date', 'ride_on', 'ride_off')
+    bus_df = pd.DataFrame(bus)
+    bus_df['date'] = pd.to_datetime(bus_df['date']).dt.date
+
+    bus_qs = (BusDaily.objects
+              .values('date')
+              .annotate(
+                  bus_boaring = Sum('ride_on'),
+                  bus_alightings = Sum('ride_off')
+              )
+              .order_by('date')
+            )
+
+    bus_df = pd.DataFrame(list(bus_qs))
 
     #날씨 + 분실물 + 지하철 승하차 인원
     final_df = pd.merge(
@@ -452,6 +466,13 @@ def lostitem_analysis_view(request):
         on='date', 
         how='left'
     )
+
+    final_df = pd.merge(
+        final_df,
+        bus_df,
+        on='date',
+        how='left'
+    ).fillna(0)
 
     # 총 분실물 계산
     category_cols = [

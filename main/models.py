@@ -74,6 +74,14 @@ class RidershipDaily(models.Model):
     def __str__(self):
         return f"{self.date} / {self.line_code} @{self.station_name_std}: {self.total}명"
 
+class BusDaily(models.Model):
+    #버스 승하차 인원 모델
+    date = models.DateField(db_index=True, verbose_name="날짜")
+    line_id = models.CharField(max_length=50, verbose_name="노선 번호")
+    stops_id = models.CharField(max_length=50, verbose_name="정류장 아이디")
+    ride_on = models.IntegerField(verbose_name="승차 인원")
+    ride_off = models.IntegerField(verbose_name="하차 인원")
+
 # ----------------------------------------------------------------------
 # 3. 날씨 정보 모델 (B 담당)
 # ----------------------------------------------------------------------

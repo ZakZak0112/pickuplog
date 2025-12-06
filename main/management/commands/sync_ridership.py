@@ -28,7 +28,7 @@ def normalize_station_name(raw_name):
 
 
 class Command(BaseCommand):
-    help = '서울시 승하차 인원 데이터를 API에서 조회하여 적재합니다.'
+    help = '서울시 지하철 승하차 인원 데이터를 API에서 조회하여 적재합니다.'
 
     def add_arguments(self, parser):
         parser.add_argument('--date', type=str, default=None)
