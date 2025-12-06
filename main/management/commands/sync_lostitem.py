@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 
 from main.models import LostItem, StationDict
 
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
+
 # --- Helper Functions ---
 def parse_date_and_make_aware(date_str):
     """
@@ -36,7 +39,7 @@ class Command(BaseCommand):
         load_dotenv()
         API_KEY = os.getenv("SEOUL_API_KEY", "6671454b426c6f763833785471726d") 
         BASE_URL = f"http://openapi.seoul.go.kr:8088/{API_KEY}/json/lostArticleInfo/1/1000/" 
-        
+
         self.stdout.write(self.style.MIGRATE_HEADING('LostItem 데이터 동기화 시작...'))
         
         # 서울 지하철역 목록 로드 (StationDict 활용)
@@ -137,6 +140,10 @@ class Command(BaseCommand):
                 except Exception as e:
                     self.stdout.write(self.style.ERROR(f"[{data.get('LOST_MNG_NO')}] 데이터 처리 오류: {e}"))
                     continue
+
+                
+        three_months_ago = date.today() - relativedelta(months=3)
+        LostItem.objects.filter(registered_at__date__lt=three_months_ago).delete()
 
         self.stdout.write(self.style.SUCCESS(
             f'[SUCCESS] LostItem 데이터 동기화 완료! 총 {len(rows)}건 중 {success_count}건 적재/업데이트되었습니다.'

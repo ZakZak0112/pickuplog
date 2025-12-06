@@ -390,9 +390,7 @@ def insight_report(request):
 
 #날씨별, 노선별, 역별 분실물 + 승하차 인원 집계 뷰
 def lostitem_analysis_view(request):
-        # -----------------------------
-    # 1) LostItem 불러오기
-    # -----------------------------
+    #LostItem 불러오기
     lostitems = LostItem.objects.all().values(
         'registered_at', 'category'
     )
@@ -415,18 +413,32 @@ def lostitem_analysis_view(request):
 
     pivot_df.columns.name = None
 
-    # -----------------------------
-    # 2) WeatherDaily 불러오기
-    # -----------------------------
+    #WeatherDaily 불러오기
     weather = WeatherDaily.objects.all().values(
         'date', 'is_rainy', 'rain_mm', 'avg_temp'
     )
     weather_df = pd.DataFrame(weather)
     weather_df['date'] = pd.to_datetime(weather_df['date']).dt.date
 
-    # -----------------------------
-    # 3) Merge (날씨 + 분실물)
-    # -----------------------------
+    #RidershipDaily 불러오기
+    ridership = RidershipDaily.objects.values('date', 'boardings', 'alightings', 'total')
+    ridership_df = pd.DataFrame(ridership)
+    ridership_df['date'] = pd.to_datetime(ridership_df['date']).dt.date
+    
+    ridership_qs = (RidershipDaily.objects
+                    .values('date')
+                    .annotate(
+                        subway_boarding=Sum('boardings'),
+                        subway_alightings=Sum('alightings'),
+                        subway_sums=Sum('total')
+                    )
+                    .order_by('date')
+    )
+    ridership_df=pd.DataFrame(list(ridership_qs))
+
+    #
+
+    #날씨 + 분실물 + 지하철 승하차 인원
     final_df = pd.merge(
         weather_df,
         pivot_df,
@@ -434,10 +446,17 @@ def lostitem_analysis_view(request):
         how='left'
     ).fillna(0)
 
+    final_df = pd.merge(
+        final_df, 
+        ridership_df, 
+        on='date', 
+        how='left'
+    )
+
     # 총 분실물 계산
     category_cols = [
-        c for c in final_df.columns
-        if c not in ['date', 'rain_mm', 'avg_temp', 'is_rainy']
+        c for c in pivot_df.columns
+        if c not in ['date', 'registered_at']
     ]
 
     final_df['total_lost'] = final_df[category_cols].sum(axis=1)
@@ -445,9 +464,7 @@ def lostitem_analysis_view(request):
     # 최신순 정렬
     final_df = final_df.sort_values('date', ascending=False)
 
-    # -----------------------------
-    # 4) 회귀 분석 (강수량 → 분실물 총합)
-    # -----------------------------
+    ##회귀 분석 (강수량 → 분실물 총합)
     rain_list = final_df['rain_mm'].astype(float).tolist()
     lost_list = final_df['total_lost'].astype(int).tolist()
 
@@ -467,9 +484,7 @@ def lostitem_analysis_view(request):
         for i in range(len(x_line))
     ]
 
-    # -----------------------------
-    # 5) 집단별 통계 계산
-    # -----------------------------
+    ##집단별 통계 계산
     stats = {
         'rain_mm': {
             'mean': round(final_df['rain_mm'].mean(), 2),
@@ -491,9 +506,7 @@ def lostitem_analysis_view(request):
         },
     }
 
-    # -----------------------------
-    # 6) 템플릿 전달
-    # -----------------------------
+    ##6) 템플릿 전달
     reports = final_df.to_dict(orient='records')
 
     return render(request, 'main/analysis.html', {
