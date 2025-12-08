@@ -11,5 +11,5 @@ class Command(BaseCommand):
         call_command('sync_bus')
         call_command('sync_reports')
         call_command('sync_lostitem_line')
-        #call_command('compare_station_names') #로딩 오래 걸려서 제외
+        call_command('compare_station_names') 
         call_command('debug_station_matching')
