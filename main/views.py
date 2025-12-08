@@ -6,14 +6,18 @@ from django.conf import settings
 from django.contrib import messages 
 from django.db import IntegrityError 
 from django.http import HttpResponse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from django.shortcuts import render
 
 from django.shortcuts import render
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from main.models import LostItem, WeatherDaily, RidershipDaily, StationDict
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
+from main.models import LostItem, WeatherDaily, RidershipDaily, BusDaily
+
+import json
 
 # 프로젝트 모델 임포트
 from .models import LostItem, RidershipDaily, RainImpactReport, WeatherDaily 
@@ -204,56 +208,53 @@ def home(request):
 # ----------------------------------------------------------------------
 # 3. Archive View (분실물 데이터 아카이빙)
 # ----------------------------------------------------------------------
-
 def lostitem_list(request):
     """
     LostItem 데이터를 조회하고 검색/필터링을 적용하는 뷰.
     """
     form = LostItemSearchForm(request.GET)
-    queryset = LostItem.objects.all().order_by('-registered_at') # 기본은 최신 등록 순
+    queryset = LostItem.objects.all().order_by('-registered_at')  # select_related 제거
+    page_size = 30
 
-    page_size = 30 
-
-    # 1. 필터링 로직
+    # 1. 필터링
     if form.is_valid():
         data = form.cleaned_data
         
-        if data['q']:
+        if data.get('q'):
             queryset = queryset.filter(
                 Q(item_name__icontains=data['q']) |
                 Q(description__icontains=data['q']) |
                 Q(station__icontains=data['q'])
             )
 
-        if data['transport']:
+        if data.get('transport'):
             queryset = queryset.filter(transport=data['transport'])
 
-        if data['status']:
+        if data.get('status'):
             queryset = queryset.filter(status=data['status'])
-            
-        if data['only_unreceived']: 
-            queryset = queryset.filter(is_received=False)
-            
-        if data['category']:
-             queryset = queryset.filter(category__in=data['category'])
 
-        if data['date_from']:
+        if data.get('only_unreceived'):
+            queryset = queryset.filter(is_received=False)
+
+        if data.get('category'):
+            queryset = queryset.filter(category__in=data['category'])
+
+        if data.get('date_from'):
             queryset = queryset.filter(registered_at__gte=data['date_from'])
-        if data['date_to']:
+
+        if data.get('date_to'):
             end_date = data['date_to'] + timedelta(days=1)
             queryset = queryset.filter(registered_at__lt=end_date)
-            
-        if data['sort']:
-            if data['sort'] == 'registered_at_asc':
-                queryset = queryset.order_by('registered_at')
-            elif data['sort'] == 'views_desc':
-                 queryset = queryset.order_by('-views')
 
-        raw_page_size = data.get('page_size', 30)
-        
+        if data.get('sort') == 'registered_at_asc':
+            queryset = queryset.order_by('registered_at')
+        elif data.get('sort') == 'views_desc':
+            queryset = queryset.order_by('-views')
+
+        # page_size 안전 처리
         try:
-            page_size = int(raw_page_size) if raw_page_size is not None else 30
-        except ValueError:
+            page_size = int(data.get('page_size') or 30)
+        except (ValueError, TypeError):
             page_size = 30
 
     # 2. 페이지네이션
@@ -262,16 +263,12 @@ def lostitem_list(request):
 
     try:
         page_obj = paginator.page(page_number)
-    except EmptyPage:
-        page_obj = paginator.page(paginator.num_pages)
-    except:
+    except (EmptyPage, PageNotAnInteger):
         page_obj = paginator.page(1)
 
     # 3. 쿼리 스트링 생성
     url_query_string = request.GET.copy()
-    if 'page' in url_query_string:
-        del url_query_string['page']
-    
+    url_query_string.pop('page', None)
     url_query_string = f"&{url_query_string.urlencode()}" if url_query_string else ""
 
     context = {
@@ -279,12 +276,10 @@ def lostitem_list(request):
         'page_obj': page_obj,
         'url_query_string': url_query_string,
         'total_count': queryset.count(),
-        'items': queryset,
+        'items': page_obj.object_list,  # 전체 쿼리셋 대신 현재 페이지 아이템만 전달
     }
-    
+
     return render(request, 'main/lostitem_list.html', context)
-
-
 # ----------------------------------------------------------------------
 # 4. 분석 결과 뷰 (trend, correlation, insight)
 # ----------------------------------------------------------------------
@@ -397,9 +392,9 @@ def insight_report(request):
 
 #날씨별, 노선별, 역별 분실물 + 승하차 인원 집계 뷰
 def lostitem_analysis_view(request):
-        # -----------------------------
-    # 1) LostItem 불러오기
-    # -----------------------------
+    print("호출테스트1")
+
+    #LostItem 불러오기
     lostitems = LostItem.objects.all().values(
         'registered_at', 'category'
     )
@@ -410,6 +405,8 @@ def lostitem_analysis_view(request):
 
     lost_df['date'] = pd.to_datetime(lost_df['registered_at']).dt.date
     lost_df['category'] = lost_df['category'].fillna('기타')
+
+    print("호출테스트2")
 
     # 날짜별 + 카테고리별 pivot
     pivot_df = lost_df.pivot_table(
@@ -422,18 +419,57 @@ def lostitem_analysis_view(request):
 
     pivot_df.columns.name = None
 
-    # -----------------------------
-    # 2) WeatherDaily 불러오기
-    # -----------------------------
+    #WeatherDaily 불러오기
     weather = WeatherDaily.objects.all().values(
         'date', 'is_rainy', 'rain_mm', 'avg_temp'
     )
     weather_df = pd.DataFrame(weather)
     weather_df['date'] = pd.to_datetime(weather_df['date']).dt.date
 
-    # -----------------------------
-    # 3) Merge (날씨 + 분실물)
-    # -----------------------------
+    #RidershipDaily 불러오기
+    ridership = RidershipDaily.objects.values('date', 'boardings', 'alightings', 'total')
+    ridership_df = pd.DataFrame(ridership)
+    ridership_df['date'] = pd.to_datetime(ridership_df['date']).dt.date
+    
+    ridership_qs = (RidershipDaily.objects
+                    .values('date')
+                    .annotate(
+                        subway_boardings=Sum('boardings'),
+                        subway_alightings=Sum('alightings')
+                    )
+                    .order_by('date')
+    )
+    ridership_df=pd.DataFrame(list(ridership_qs))
+
+    #BusDaily 불러오기
+    bus = BusDaily.objects.values('date', 'ride_on', 'ride_off')
+    bus_df = pd.DataFrame(bus)
+    bus_df['date'] = pd.to_datetime(bus_df['date']).dt.date
+
+    bus_qs = (BusDaily.objects
+              .values('date')
+              .annotate(
+                  bus_boardings = Sum('ride_on'),
+                  bus_alightings = Sum('ride_off')
+              )
+              .order_by('date')
+            )
+
+    bus_df = pd.DataFrame(list(bus_qs))
+
+
+    #버스+지하철 통합 승하차 인원
+    boardings_df = pd.merge(bus_df, ridership_df, on='date', how='outer').fillna(0)
+    boardings_df['total_boardings'] = boardings_df['bus_boardings'] + boardings_df['subway_boardings']
+    boardings_df['date_str'] = boardings_df['date'].astype(str)
+    total_boardings_dict = {row['date_str']: row['total_boardings'] for _, row in boardings_df.iterrows()}
+    
+    alightings_df = pd.merge(bus_df, ridership_df, on='date', how='outer').fillna(0)
+    alightings_df['total_alightings'] = alightings_df['bus_alightings'] + alightings_df['subway_alightings']
+    alightings_df['date_str'] = alightings_df['date'].astype(str)
+    total_alightings_dict = {row['date_str']: row['total_alightings'] for _, row in alightings_df.iterrows()}
+
+    #날씨 + 분실물 + 지하철 승하차 인원
     final_df = pd.merge(
         weather_df,
         pivot_df,
@@ -441,10 +477,24 @@ def lostitem_analysis_view(request):
         how='left'
     ).fillna(0)
 
+    final_df = pd.merge(
+        final_df, 
+        ridership_df, 
+        on='date', 
+        how='left'
+    )
+
+    final_df = pd.merge(
+        final_df,
+        bus_df,
+        on='date',
+        how='left'
+    ).fillna(0)
+
     # 총 분실물 계산
     category_cols = [
-        c for c in final_df.columns
-        if c not in ['date', 'rain_mm', 'avg_temp', 'is_rainy']
+        c for c in pivot_df.columns
+        if c not in ['date', 'registered_at']
     ]
 
     final_df['total_lost'] = final_df[category_cols].sum(axis=1)
@@ -452,9 +502,7 @@ def lostitem_analysis_view(request):
     # 최신순 정렬
     final_df = final_df.sort_values('date', ascending=False)
 
-    # -----------------------------
-    # 4) 회귀 분석 (강수량 → 분실물 총합)
-    # -----------------------------
+    ##회귀 분석 (강수량 → 분실물 총합)
     rain_list = final_df['rain_mm'].astype(float).tolist()
     lost_list = final_df['total_lost'].astype(int).tolist()
 
@@ -474,9 +522,7 @@ def lostitem_analysis_view(request):
         for i in range(len(x_line))
     ]
 
-    # -----------------------------
-    # 5) 집단별 통계 계산
-    # -----------------------------
+    ##집단별 통계 계산
     stats = {
         'rain_mm': {
             'mean': round(final_df['rain_mm'].mean(), 2),
@@ -498,15 +544,35 @@ def lostitem_analysis_view(request):
         },
     }
 
-    # -----------------------------
-    # 6) 템플릿 전달
-    # -----------------------------
+    ##6) 템플릿 전달
     reports = final_df.to_dict(orient='records')
 
+    recent_rainy = 0
+    recent_sunny = 0
+    i = 0
+    while recent_rainy == 0 or recent_sunny == 0:
+        if reports[i]['total_lost'] > 0 and reports[i]['subway_boardings'] > 0 and reports[i]['bus_boardings'] > 0:
+            if reports[i]['is_rainy']:
+                recent_rainy = reports[i]['date']
+                recent_rainy_lostitem = reports[i]['total_lost']
+                recent_rain_mm = reports[i]['rain_mm']
+            elif not reports[i]['is_rainy']:
+                recent_sunny = reports[i]['date']
+                recent_sunny_lostitem = reports[i]['total_lost']
+        i += 1
+    
+    print("호출테스트2")
     return render(request, 'main/analysis.html', {
         'reports': reports,
         'rain_list': rain_list,
         'lost_list': lost_list,
         'regression_line': regression_line,
         'stats': stats,
+        'total_boardings': json.dumps(total_boardings_dict),
+        'total_alightings': json.dumps(total_alightings_dict),
+        'recent_rainy': recent_rainy,
+        'recent_sunny': recent_sunny,
+        'recent_rainy_lostitem': recent_rainy_lostitem,
+        'recent_sunny_lostitem': recent_sunny_lostitem,
+        'recent_rain_mm': recent_rain_mm
     })

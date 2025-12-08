@@ -1,8 +1,6 @@
 from pathlib import Path
 
-# 💡 수정 1: BASE_DIR이 settings.py 파일이 있는 'pickuplog' 폴더 자체를 가리키도록 수정
-# (parent.parent -> parent)
-BASE_DIR = Path(__file__).resolve().parent 
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'dev-only-secret-key'
 DEBUG = True
@@ -49,7 +47,6 @@ TEMPLATES = [
     },
 ]
 
-# 💡 수정 2: 파일 구조에 맞게 WSGI_APPLICATION 경로 수정 (config.wsgi -> pickuplog.wsgi)
 WSGI_APPLICATION = 'pickuplog.wsgi.application'
 
 DATABASES = {
