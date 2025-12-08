@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import LostItem, StationDict, RidershipDaily, WeatherDaily
+from .models import LostItem, StationDict, RidershipDaily, WeatherDaily, BusDaily
 
 # ----------------------------------------------------------------------
 # 1. LostItem (기존 코드 유지 및 확장)
@@ -42,7 +42,9 @@ class RidershipDailyAdmin(admin.ModelAdmin):
     # 최신 날짜 순, 총 인원 순으로 정렬
     ordering = ('-date', '-total') 
 
-
+@admin.register(BusDaily)
+class BusDaily(admin.ModelAdmin):
+    list_display = ('date', 'line_id', 'stops_id', 'ride_on', 'ride_off')
 
 # ----------------------------------------------------------------------
 # 4. WeatherDaily (일별 날씨 정보 - B 담당)

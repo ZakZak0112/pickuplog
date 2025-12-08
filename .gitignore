@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -214,3 +215,73 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+=======
+# ==========================
+# 🐍 Python 기본
+# ==========================
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.so
+*.pyo
+*.pyd
+*.egg
+*.manifest
+*.spec
+
+# ==========================
+# 🧱 Django 관련
+# ==========================
+media/
+staticfiles/
+collectstatic/
+*.log
+db.sqlite3
+
+
+# 번역 파일 캐시
+*.mo
+*.pot
+
+# Django migrations 캐시 (단, .py 파일은 커밋해야 함)
+**/migrations/__pycache__/
+
+# ==========================
+# 🔐 환경변수 / 비밀키
+# ==========================
+.env
+*.secret
+*.key
+
+# ==========================
+# 💻 가상환경 (venv)
+# ==========================
+venv/
+.venv/
+env/
+ENV/
+Scripts/
+Include/
+Lib/
+pyvenv.cfg
+
+# ==========================
+# 🧰 IDE / 시스템 파일
+# ==========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ==========================
+# 🖼 기타
+# ==========================
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.psd
+*.pt
+*.onnx
+*.tflite
+>>>>>>> main

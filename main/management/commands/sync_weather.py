@@ -6,6 +6,9 @@ from main.models import WeatherDaily
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 
+from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
+
 class Command(BaseCommand):
     help = "기상청 ASOS XML 데이터(서울 108번)를 불러와 WeatherDaily에 저장합니다."
 
@@ -99,6 +102,10 @@ class Command(BaseCommand):
                 }
             )
             saved_count += 1
+        
+        #3개월 이전 데이터 삭제
+        #three_months_ago = date.today() - relativedelta(months=3)
+        #WeatherDaily.objects.filter(date__lt=three_months_ago).delete() 
 
         self.stdout.write(self.style.SUCCESS(
             f"✔ 수집 완료 — 총 {saved_count}건 저장됨."

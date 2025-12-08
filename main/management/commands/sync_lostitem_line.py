@@ -8,6 +8,8 @@ import re
 from main.models import LostItem, StationDict
 
 
+
+
 class Command(BaseCommand):
     help = 'LostItem의 station(발견역) 필드를 사용하여 StationDict에서 노선 정보를 찾아 보강합니다. (지하철역만)'
 
@@ -67,7 +69,7 @@ class Command(BaseCommand):
             lost_items_to_update = LostItem.objects.filter(
                 station__isnull=False, 
                 station__icontains='역',
-                line__isnull=True 
+                line__isnull=True,
             )
         else:
             # 기본: transport="subway"인 것만 처리
@@ -75,7 +77,7 @@ class Command(BaseCommand):
                 transport='subway',  # 🚇 지하철만!
                 station__isnull=False, 
                 station__icontains='역',
-                line__isnull=True 
+                line__isnull=True ,
             )
         
         total_count = lost_items_to_update.count()
