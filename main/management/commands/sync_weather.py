@@ -102,8 +102,10 @@ class Command(BaseCommand):
                 }
             )
             saved_count += 1
-        three_months_ago = date.today() - relativedelta(months=3)
-        WeatherDaily.objects.filter(date__lt=three_months_ago).delete()
+        
+        #3개월 이전 데이터 삭제
+        #three_months_ago = date.today() - relativedelta(months=3)
+        #WeatherDaily.objects.filter(date__lt=three_months_ago).delete() 
 
         self.stdout.write(self.style.SUCCESS(
             f"✔ 수집 완료 — 총 {saved_count}건 저장됨."

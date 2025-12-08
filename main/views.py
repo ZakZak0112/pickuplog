@@ -392,6 +392,8 @@ def insight_report(request):
 
 #날씨별, 노선별, 역별 분실물 + 승하차 인원 집계 뷰
 def lostitem_analysis_view(request):
+    print("호출테스트1")
+
     #LostItem 불러오기
     lostitems = LostItem.objects.all().values(
         'registered_at', 'category'
@@ -403,6 +405,8 @@ def lostitem_analysis_view(request):
 
     lost_df['date'] = pd.to_datetime(lost_df['registered_at']).dt.date
     lost_df['category'] = lost_df['category'].fillna('기타')
+
+    print("호출테스트2")
 
     # 날짜별 + 카테고리별 pivot
     pivot_df = lost_df.pivot_table(
@@ -452,6 +456,7 @@ def lostitem_analysis_view(request):
             )
 
     bus_df = pd.DataFrame(list(bus_qs))
+
 
     #버스+지하철 통합 승하차 인원
     boardings_df = pd.merge(bus_df, ridership_df, on='date', how='outer').fillna(0)
@@ -555,7 +560,8 @@ def lostitem_analysis_view(request):
                 recent_sunny = reports[i]['date']
                 recent_sunny_lostitem = reports[i]['total_lost']
         i += 1
-
+    
+    print("호출테스트2")
     return render(request, 'main/analysis.html', {
         'reports': reports,
         'rain_list': rain_list,
