@@ -17,7 +17,8 @@ urlpatterns = [
     path('archive/lostitem/upload/csv/', views.lostitem_upload_csv, name='lostitem_upload_csv'), 
 
     #추가 분석 페이지
-    path('weather-report/', views.lostitem_analysis_view, name='weather_lostitem_report'),
-
-
+    path('analysis/table/', views.analysis_view, {'section': 'table'}, name='analysis_table'),
+    path('analysis/regression/', views.analysis_view, {'section': 'regression'}, name='analysis_regression'),
+    path('analysis/stats/', views.analysis_view, {'section': 'stats'}, name='analysis_stats'),
+    path('analysis/visualization/', views.analysis_view, {'section': 'visualization'}, name='analysis_visualization'),
 ]
