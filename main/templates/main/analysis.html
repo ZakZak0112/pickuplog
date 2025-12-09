@@ -125,15 +125,16 @@
     <h2>📊 분실물 & 날씨 분석</h2>
 
     <!-- ---------------- 버튼 영역 ---------------- -->
-    <button class="toggle-btn" onclick="toggleSection('table-section')">분석 테이블 보기</button>
-    <button class="toggle-btn" onclick="toggleSection('regression-section')">강수량-분실물 회귀 그래프</button>
-    <button class="toggle-btn" onclick="toggleSection('stats-section')">집단별 통계 보기</button>
-    <button class="toggle-btn" onclick="toggleSection('visualization-section')">시각화 보기</button>
+    <button class="toggle-btn" onclick="window.location.href='{% url 'analysis_table' %}'">분석 테이블 보기</button>
+    <button class="toggle-btn" onclick="window.location.href='{% url 'analysis_regression' %}'">강수량-분실물 회귀 그래프</button>
+    <button class="toggle-btn" onclick="window.location.href='{% url 'analysis_stats' %}'">집단별 통계 보기</button>
+    <button class="toggle-btn" onclick="window.location.href='{% url 'analysis_visualization' %}'">시각화 보기</button>
 
     <hr>
 
     <!-- ---------------- 1. 데이터 테이블 ---------------- -->
-    <div id="table-section" class="hidden-section">
+    {% if show_table %}
+    <div id="table-section">
  
         <h3>📅 날짜별 분석 테이블</h3>
         <table>
@@ -171,9 +172,11 @@
             </tbody>
         </table>
     </div>
+    {% endif %}
 
+    {% if show_regression %}
     <!-- ---------------- 2. 선형 회귀 그래프 ---------------- -->
-    <div id="regression-section" class="hidden-section">
+    <div id="regression-section">
         <h3>📈 강수량 ↔ 분실물 총합 선형회귀</h3>
         <canvas id="rainLostRegression" width="600" height="300"></canvas>
     </div>
@@ -220,10 +223,11 @@
             }
         });
     </script>
+    {% endif %}
 
-
+    {% if show_stats %}
     <!-- ---------------- 3. 집단별 통계 ---------------- -->
-    <div id="stats-section" class="hidden-section">
+    <div id="stats-section">
         <h3>📌 집단별 통계 (강수량·기온·총 분실물)</h3>
 
         <h4>강수량(mm)</h4>
@@ -250,9 +254,11 @@
             <li>데이터 개수: {{ stats.total_lost.count }}</li>
         </ul>
     </div>
+    {% endif %}
 
+    {% if show_visualization %}
     <!--시각화 섹션-->
-    <div id="visualization-section" class="hidden-section">
+    <div id="visualization-section">
 
         <div id="toggle-weather"> <!--버튼 토글-->
             <span id="current-date"></span>
@@ -439,16 +445,17 @@
             }
             else {
                 //날씨에 따라 떨어지는 분실물 확률 다르게 하기
+                let random;
                 if (date == "{{recent_sunny}}") 
                 {
-                    let random = 0.8;
+                    random = 1;
                 }
                 else 
                 {
-                    let random = 0.2;
+                    random = 0.2;
                 }
 
-                if (Math.random() < random) {
+                if (Math.random() <= random) {
                     use.setAttribute("href", "#bag");  // defs 안에 정의한 id
 
                     const randomX = x + Math.random() * 10;
@@ -522,6 +529,7 @@
                 NUM_PEOPLE_boardings = totalBoardings[date_formatted] / 1000000;
                 totalAlightings = {{total_alightings|safe}};
                 NUM_PEOPLE = totalBoardings[date_formatted] + totalAlightings[date_formatted];
+                document.getElementById('num-people').textContent = NUM_PEOPLE.toLocaleString();
 
                 lostitems = {{recent_sunny_lostitem}}; 
                 document.getElementById('num-lostitem').textContent = lostitems.toLocaleString();
@@ -558,7 +566,8 @@
                 NUM_PEOPLE_boardings = totalBoardings[date_formatted] / 1000000;
                 totalAlightings = {{total_alightings|safe}};
                 NUM_PEOPLE = totalBoardings[date_formatted] + totalAlightings[date_formatted];
-                
+                document.getElementById('num-people').textContent = NUM_PEOPLE.toLocaleString();
+
                 lostitems = {{recent_rainy_lostitem}};
                 document.getElementById('num-lostitem').textContent = lostitems.toLocaleString();
                 
@@ -647,6 +656,7 @@
         }
 
     </script>
+    {% endif %}
 
 </body>
 </html>

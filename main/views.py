@@ -391,7 +391,7 @@ def insight_report(request):
 
 
 #날씨별, 노선별, 역별 분실물 + 승하차 인원 집계 뷰
-def lostitem_analysis_view(request):
+def analysis_view(request, section):
     #LostItem 불러오기
     lostitems = LostItem.objects.all().values(
         'registered_at', 'category'
@@ -562,7 +562,7 @@ def lostitem_analysis_view(request):
         total_sunny_lostitem = final_df.loc[final_df['is_rainy'] == False, 'total_lost'].sum()
         lostitem_percent_increse = total_sunny_lostitem / total_rainy_lostitem
 
-    return render(request, 'main/analysis.html', {
+    context ={
         'reports': reports,
         'rain_list': rain_list,
         'lost_list': lost_list,
@@ -578,4 +578,14 @@ def lostitem_analysis_view(request):
         'total_sunny_lostitem': total_sunny_lostitem,
         'total_rainy_lostitem': total_rainy_lostitem,
         'lostitem_percent_increse':lostitem_percent_increse
-    })
+    }
+
+    if section == 'table':
+        context['show_table'] = True
+    elif section == 'regression':
+        context['show_regression'] = True
+    elif section == 'stats':
+        context['show_stats'] = True
+    elif section == 'visualization':
+        context['show_visualization'] = True
+    return render(request, 'main/analysis.html', context)
