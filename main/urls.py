@@ -16,6 +16,5 @@ urlpatterns = [
 
     #추가 분석 페이지
     path('weather-report/', views.lostitem_analysis_view, name='weather_lostitem_report'),
-
-
+    
 ]
