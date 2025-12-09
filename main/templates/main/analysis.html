@@ -82,6 +82,9 @@
             font-size: 16px;              /* 글자 크기 */
             font-family: Arial, sans-serif;
         }
+        #context-2 {
+            color: #888888;
+        }
 
         #context-3 {
             margin: 20px auto 0 auto;
@@ -635,7 +638,7 @@
 
                 const data = [{ 
                     x: ['비 오는 날','맑은 날'],
-                    y: [{{total_rainy_lostitem}}, {{total_sunny_lostitem}}],
+                    y: [{{rainy_lostitem_perDay}}, {{sunny_lostitem_perDay}}],
                     type: 'bar'
                 }];
                 const layout = {
@@ -648,10 +651,18 @@
                 act.textContent = "ACT 3. 결론"
                 context_title.innerHTML = "범인은 날씨가 아니라 '혼잡도'였습니다"
                 context_1.innerHTML = "비가 오면 사람들이 외출을 줄여 대중교통 이용객 자체가 줄어듭니다. <br> '사람이 적으면 → 분실물도 적다'는 단순한 진리였죠. <br> 날씨는 직접적인 원인이 아니라 간접적인 배경이었을 뿐입니다."
-                context_2.innerHTML = ""
+                context_2.innerHTML = "밑의 그래프는 사람 수에 영향을 받지 않도록 처리한 그래프입니다."
                 
-                context_3.style.height = '1px';
-                Plotly.purge('context-3')
+                const data = [{ 
+                    x: ['비 오는 날','맑은 날'],
+                    y: [{{rainy_lostitem_perPerson}}, {{sunny_lostitem_perPerson}}],
+                    type: 'bar'
+                }];
+                const layout = {
+                    margin: { l: 30, r: 10, t: 10, b: 30 }  // left, right, top, bottom
+                };
+                context_3.style.height = '200px';
+                Plotly.newPlot('context-3', data, layout);
             }
         }
 

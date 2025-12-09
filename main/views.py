@@ -558,9 +558,20 @@ def analysis_view(request, section):
             
         i += 1
 
-        total_rainy_lostitem = final_df.loc[final_df['is_rainy'] == True, 'total_lost'].sum()
-        total_sunny_lostitem = final_df.loc[final_df['is_rainy'] == False, 'total_lost'].sum()
-        lostitem_percent_increse = total_sunny_lostitem / total_rainy_lostitem
+    total_rainy_lostitem = final_df.loc[final_df['is_rainy'] == True, 'total_lost'].sum()
+    rainy_lostitem_perDay = total_rainy_lostitem / len(final_df.loc[final_df['is_rainy'] == True, 'total_lost'])
+    total_sunny_lostitem = final_df.loc[final_df['is_rainy'] == False, 'total_lost'].sum()
+    sunny_lostitem_perDay = total_sunny_lostitem / len(final_df.loc[final_df['is_rainy'] == False, 'total_lost'])
+    
+    rainy_people = boardings_df.loc[final_df['is_rainy'] == True, 'total_boardings'].sum() + alightings_df.loc[final_df['is_rainy'] == True, 'total_alightings'].sum()
+    rainy_lostitem_perPerson = total_rainy_lostitem / rainy_people
+    print(f"{total_rainy_lostitem} / {rainy_people} = {rainy_lostitem_perPerson}")
+    
+    sunny_people = boardings_df.loc[final_df['is_rainy'] == False, 'total_boardings'].sum() + alightings_df.loc[final_df['is_rainy'] == False, 'total_alightings'].sum()
+    sunny_lostitem_perPerson = total_sunny_lostitem / sunny_people
+    print(f"{total_sunny_lostitem} / {sunny_people} = {sunny_lostitem_perPerson}")
+
+    lostitem_percent_increse = total_sunny_lostitem / total_rainy_lostitem
 
     context ={
         'reports': reports,
@@ -568,6 +579,7 @@ def analysis_view(request, section):
         'lost_list': lost_list,
         'regression_line': regression_line,
         'stats': stats,
+
         'total_boardings': json.dumps(total_boardings_dict),
         'total_alightings': json.dumps(total_alightings_dict),
         'recent_rainy': recent_rainy,
@@ -575,8 +587,11 @@ def analysis_view(request, section):
         'recent_rainy_lostitem': recent_rainy_lostitem,
         'recent_sunny_lostitem': recent_sunny_lostitem,
         'recent_rain_mm': recent_rain_mm,
-        'total_sunny_lostitem': total_sunny_lostitem,
-        'total_rainy_lostitem': total_rainy_lostitem,
+
+        'sunny_lostitem_perDay': sunny_lostitem_perDay,
+        'rainy_lostitem_perDay': rainy_lostitem_perDay,
+        'rainy_lostitem_perPerson': rainy_lostitem_perPerson,
+        'sunny_lostitem_perPerson': sunny_lostitem_perPerson,
         'lostitem_percent_increse':lostitem_percent_increse
     }
 
