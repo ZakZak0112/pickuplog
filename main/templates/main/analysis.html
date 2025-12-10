@@ -125,11 +125,13 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    {% if show_table or show_regression or show_stats or show_boxPlot %}
     <h2>📊 분실물 & 날씨 분석</h2>
     <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/stats/'">꺾은선그래프</button>
     <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/boxPlot/'">상자 수염 그래프</button>
     <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/regression/'">회귀 그래프</button>
     <hr>
+    {% endif %}
 
     {% if show_table %}
     <div id="table-section">
@@ -694,7 +696,17 @@
             if (page < 4) {
                 page += 1; 
                 pageChange();
-            } 
+            }
+
+            //상세 페이지 이동 버튼
+            if (page == 3) {
+                nextBtn.innerHTML = "상세 페이지로"
+                nextBtn.onclick = function() { window.location.href = "analysis/stats/";};
+            }
+            else {
+                nextBtn.innerHTML = "다음으로"
+                nextBtn.onclick = null
+            }
         })
 
         const act = document.getElementById("act");
