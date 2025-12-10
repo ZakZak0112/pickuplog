@@ -2,6 +2,7 @@
 # 🐍 Python 기본
 # ==========================
 __pycache__/
+*.cpy
 *.pyc
 *.py[cod]
 *.egg-info/
