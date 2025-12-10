@@ -119,6 +119,17 @@
         #next-btn:hover {
             background-color: #3a5dcc; /* 살짝 진하게 */
         }
+
+        .tooltip {
+        position: absolute;
+        background: white;
+        border: 1px solid #aaa;
+        padding: 8px 10px;
+        border-radius: 6px;
+        pointer-events: none;
+        opacity: 0;
+        font-size: 12px;
+        }
     </style>
 
     <!-- Chart.js CDN -->
@@ -176,95 +187,199 @@
 
     {% if show_regression %}
     <h1>회귀 그래프</h1>
-
     <svg id="regressionChart" width="600" height="400"></svg>
+    <div class="tooltip"></div>
+
+    <button id="xRange1">전체 범위</button>
+    <button id="xRange2">제한된 범위</button>
+
+    <p>
+        전체 범위에서는 회귀선이 거의 수평에 가까워 유의미한 데이터를 얻을 수 없었습니다. 그래서 데이터를 한정하여 범위를 좁혀 보았습니다. (버튼을 눌러 확인해 보세요) <br>
+        이를 통해 인원수와 분실물 수 간의 상관관계를 입증할 수 있습니다. <br>
+        회귀선이 우상향하므로 인원수와 분실물 수 간에는 양의 상관관계가 있습니다.
+    </p>
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     {{ regression_data|json_script:"data" }}
     <script>
-    const data = JSON.parse(document.getElementById('data').textContent);
-    const svg = d3.select("#regressionChart");
+        const svg = d3.select("#regressionChart");
+        const data = JSON.parse(document.getElementById('data').textContent);
 
-    const width = +svg.attr("width") - 50;
-    const height = +svg.attr("height") - 50;
+        let minX = 12000000; 
+        let maxX = 20000000;
 
-    // x, y 스케일
-    const x = d3.scaleLinear()
-        .domain([0, d3.max(data, d => d.total_people) * 1.1])
-        .range([50, width]);
-
-    const y = d3.scaleLinear()
-        .domain([0, d3.max(data, d => d.total_lost) * 1.1])
-        .range([height, 50]);
-
-    // 점 색
-    const color = d => d.is_rainy ? "steelblue" : "orange";
-
-    // 점 그리기
-    svg.selectAll("circle")
-        .data(data)
-        .enter()
-        .append("circle")
-        .attr("cx", d => x(d.total_people))
-        .attr("cy", d => y(d.total_lost))
-        .attr("r", 5)
-        .attr("fill", color)
-        .attr("opacity", 0.7);
-
-    // --- 선형 회귀 계산 ---
-    function linearRegression(data) {
-        const n = data.length;
-        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-        data.forEach(d => {
-            sumX += d.total_people;
-            sumY += d.total_lost;
-            sumXY += d.total_people * d.total_lost;
-            sumXX += d.total_people * d.total_people;
+        const button1 = document.getElementById("xRange1");
+        button1.addEventListener("click", function() {
+            minX = d3.min(data, d => d.total_people);
+            maxX = d3.max(data, d => d.total_people);
+            reload();
         });
-        const slope = (n*sumXY - sumX*sumY) / (n*sumXX - sumX*sumX);
-        const intercept = (sumY - slope*sumX)/n;
-        return {slope, intercept};
-    }
+        const button2 = document.getElementById("xRange2");
+        button2.addEventListener("click", function() {
+            minX = 12000000; 
+            maxX = 20000000;
+            reload();
+        })
 
-    const {slope, intercept} = linearRegression(data);
+        reload();
+        function reload() 
+        {
+            d3.select("#regressionChart").selectAll("*").remove();
+            svg.selectAll(".legend-item").remove(); // 새로 그리기 전에 삭제
 
-    // 회귀선용 좌표
-    const xVals = [0, d3.max(data, d => d.total_people)];
-    const yVals = xVals.map(x => slope*x + intercept);
+            const width = +svg.attr("width") - 50;
+            const height = +svg.attr("height") - 50;
 
-    // 회귀선 그리기
-    const line = d3.line()
-        .x(d => x(d[0]))
-        .y(d => y(d[1]));
+            const tooltip = d3.select(".tooltip");
 
-    svg.append("path")
-        .datum(d3.zip(xVals, yVals))
-        .attr("fill", "none")
-        .attr("stroke", "red")
-        .attr("stroke-width", 2)
-        .attr("d", line);
+            // x, y 스케일
+            const x = d3.scaleLinear()
+                .domain([minX, maxX])
+                .range([50, width]);
 
-    // 축 그리기
-    svg.append("g")
-        .attr("transform", `translate(0, ${height})`)
-        .call(d3.axisBottom(x));
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.total_lost) * 1.1])
+                .range([height, 50]);
 
-    svg.append("g")
-        .attr("transform", `translate(50, 0)`)
-        .call(d3.axisLeft(y));
+            // 점 색
+            const color = d => d.is_rainy ? "steelblue" : "orange";
+
+            const filteredPoints = data.filter(d => d.total_people >= minX);
+            // 점 그리기
+            svg.selectAll("circle")
+                .data(filteredPoints)
+                .enter()
+                .append("circle")
+                .attr("cx", d => x(d.total_people))
+                .attr("cy", d => y(d.total_lost))
+                .attr("r", 5)
+                .attr("fill", color)
+                .attr("opacity", 0.7)
+                .on("mouseover", function(event, d) {
+                    tooltip
+                        .style("opacity", 1)
+                        .html(`
+                            <b>${d.is_rainy ? "비 오는 날" : "맑은 날"}</b><br>
+                            총 이용객: ${d.total_people}<br>
+                            분실량: ${d.total_lost}<br>
+                            날짜: ${d.date}
+                        `);
+                })
+                .on("mousemove", function(event) {
+                    tooltip
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 20) + "px");
+                })
+                .on("mouseout", function() {
+                    tooltip.style("opacity", 0);
+                });
+
+            // 범례
+            const legendData = [
+                { label: "비 오는 날", color: "steelblue" },
+                { label: "맑은 날", color: "orange" }
+            ];
+
+            const legend = svg.append("g")
+                .attr("transform", "translate(50, 20)");
+
+            legend.selectAll("legend-item")
+                .data(legendData)
+                .enter()
+                .append("g")
+                .attr("class", "legend-item")
+                .attr("transform", (d, i) => `translate(0, ${i * 20})`)
+                .each(function(d) {
+                    const g = d3.select(this);
+                    g.append("circle")
+                        .attr("cx", 0)
+                        .attr("cy", 0)
+                        .attr("r", 6)
+                        .attr("fill", d.color);
+                    g.append("text")
+                        .attr("x", 12)
+                        .attr("y", 4)
+                        .attr("font-size", "12px")
+                        .text(d.label);
+                });
+
+            // --- 선형 회귀 계산 ---
+            function linearRegression(data) {
+                const n = data.length;
+                let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+                data.forEach(d => {
+                    sumX += d.total_people;
+                    sumY += d.total_lost;
+                    sumXY += d.total_people * d.total_lost;
+                    sumXX += d.total_people * d.total_people;
+                });
+                const slope = (n*sumXY - sumX*sumY) / (n*sumXX - sumX*sumX);
+                const intercept = (sumY - slope*sumX)/n;
+                return {slope, intercept};
+            }
+
+            const filteredData = data.filter(d => d.total_people >= minX && d.total_people <= maxX);
+            const {slope, intercept} = linearRegression(filteredData);
+
+            // 회귀선용 좌표
+            const xVals = [minX, maxX];
+            const yVals = xVals.map(x => slope*x + intercept);
+
+            const line = d3.line()
+                .x(d => x(d[0]))
+                .y(d => y(d[1]));
+
+            svg.append("path")
+                .datum(d3.zip(xVals, yVals))
+                .attr("fill", "none")
+                .attr("stroke", "red")
+                .attr("stroke-width", 2)
+                .attr("d", line);
+
+            // 축 그리기
+            svg.append("g")
+                .attr("transform", `translate(0, ${height})`)
+                .call(d3.axisBottom(x).ticks(10, "~s")); 
+
+            svg.append("text")
+                .attr("x", (width + 50) / 2)
+                .attr("y", height + 40)
+                .attr("text-anchor", "middle")
+                .attr("font-size", "14px")
+                .text("승하차 인원");
+
+            svg.append("g")
+                .attr("transform", `translate(50, 0)`)
+                .call(d3.axisLeft(y));
+
+            svg.append("text")
+                .attr("text-anchor", "middle")
+                .attr("transform", `translate(15, ${(height + 50) / 2}) rotate(-90)`)
+                .attr("font-size", "14px")
+                .text("분실물 수");
+        }
+    
     </script>
+
 
     {% endif %}
 
     {% if show_stats %}
     <h1>꺾은선그래프</h1>
-    <svg id="lineChart" width="600" height="400"></svg>
+    <svg id="lineChart" width="1000" height="400"></svg>
+    <div class="tooltip"></div>
+    <svg id="pieLost" width="350" height="350"></svg>
+    <svg id="pieRain" width="350" height="350"></svg>
+    
+    <p>가정 1. 강수량과 분실물 수는 상관관계가 있다. 비가 많이 올수록 분실물 수가 늘어날 것이다.</p>
+    <p>증명: 강수량이 높은 달은 비가 오는 날이 많으므로 분실물 수가 늘어날 것이다.</p>
+    <p>결과: 강수량이 높은 달에도 낮은 달에도 분실물 수는 비슷하다. 가정 1은 틀렸다.</p>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
-        const parseDate = d3.timeParse("%Y-%m-%d");
+        const parseDate = d => new Date(d);
 
         const data1 = {{lineGraph|safe}};
-
         const data2 = {{lineGraph_weather|safe}};
 
         const svg = d3.select("#lineChart");
@@ -304,14 +419,27 @@
             .attr("stroke", "orange")
             .attr("stroke-width", 2)
             .attr("d", line);
-
+        
+        //x축
         svg.append("g")
             .attr("transform", `translate(0, ${height})`)
-            .call(d3.axisBottom(x).ticks(5).tickFormat(d3.timeFormat("%m-%d")));
-
+            .call(d3.axisBottom(x).ticks(20).tickFormat(d3.timeFormat("%m-%d")));
+        svg.append("text")
+            .attr("x", (width + 50) / 2) 
+            .attr("y", height + 40)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "14px")
+            .text("날짜");
+        
+        //y축
         svg.append("g")
             .attr("transform", `translate(50, 0)`)
             .call(d3.axisLeft(y));
+        svg.append("text")
+            .attr("text-anchor", "middle")
+            .attr("transform", `translate(15, ${(height + 50) / 2}) rotate(-90)`)
+            .attr("font-size", "14px")
+            .text("분실물 수/강수량");
 
         //라벨 붙이기
         const legend = svg.append("g")
@@ -340,6 +468,126 @@
             .attr("font-size", "12px")
             .attr("alignment-baseline", "middle");
         });
+
+        //툴팁 추가
+        const tooltip = d3.select(".tooltip");
+
+        svg.selectAll(".dot1")
+        .data(data1)
+        .enter()
+        .append("circle")
+        .attr("class", "dot1")
+        .attr("cx", d => x(d.date))
+        .attr("cy", d => y(d.value))
+        .attr("r", 4)
+        .attr("fill", "steelblue")
+        .on("mouseover", function(event, d) {
+            tooltip.style("opacity", 1)
+                .html(
+                    `<b>${d3.timeFormat("%Y-%m-%d")(d.date)}</b><br>
+                     총 분실물: ${d.value}`
+                );
+        })
+        .on("mousemove", function(event) {
+            tooltip.style("left", (event.pageX + 15) + "px")
+                   .style("top", (event.pageY - 20) + "px");
+        })
+        .on("mouseout", function() {
+            tooltip.style("opacity", 0);
+        });
+
+        svg.selectAll(".dot2")
+        .data(data2)
+        .enter()
+        .append("circle")
+        .attr("class", "dot2")
+        .attr("cx", d => x(d.date))
+        .attr("cy", d => y(d.value))
+        .attr("r", 4)
+        .attr("fill", "orange")
+        .on("mouseover", function(event, d) {
+            tooltip.style("opacity", 1)
+                .html(
+                    `<b>${d3.timeFormat("%Y-%m-%d")(d.date)}</b><br>
+                     강수량: ${d.value}`
+                );
+        })
+        .on("mousemove", function(event) {
+            tooltip.style("left", (event.pageX + 15) + "px")
+                   .style("top", (event.pageY - 20) + "px");
+        })
+        .on("mouseout", function() {
+            tooltip.style("opacity", 0);
+        });
+
+        //월별 파이 차트
+        function groupByMonth(data) {
+            const monthly = d3.rollups(
+                data,
+                v => d3.mean(v, d => d.value),
+                d => d3.timeFormat("%Y-%m")(d.date) 
+            );
+
+            return monthly.map(([month, total]) => ({
+                month,
+                value: total
+            }));
+        }
+
+        const pie = d3.pie().value(d => d.value);
+        const arc = d3.arc().innerRadius(0).outerRadius(150);
+        const color = d3.scaleOrdinal(d3.schemeCategory10);  // 기본 10색 팔레트
+
+        function drawPieChart(svgId, dataset, title) {
+
+            const svg = d3.select(svgId)
+                        .attr("width", 350)
+                        .attr("height", 350)
+                        .append("g")
+                        .attr("transform", "translate(175,190)");
+
+            const arcs = pie(dataset);
+
+            svg.selectAll("path")
+                .data(arcs)
+                .enter()
+                .append("path")
+                .attr("d", arc)
+                .attr("fill", (d, i) => color(i))
+                .style("cursor", "pointer")
+                .on("mouseover", function (event, d) {
+                    tooltip.style("opacity", 1);
+                    tooltip.html(
+                        `${title}<br>${d.data.month}<br>값: ${d.data.value}`
+                    )
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 20) + "px");
+                })
+                .on("mouseout", () => tooltip.style("opacity", 0));
+
+            // Title
+            svg.append("text")
+                .attr("text-anchor", "middle")
+                .attr("y", -160)
+                .attr("font-size", "16px")
+                .text(title);
+        }
+
+        // 날짜 파싱
+        [data1, data2].forEach(arr => {
+            arr.forEach(d => d.date = parseDate(d.date));
+        });
+
+        // 월별 집계
+        const monthlyLost = groupByMonth(data1);
+        const monthlyRain = groupByMonth(data2);
+
+        // 파이 차트 적용
+        drawPieChart("#pieLost", monthlyLost, "월평균 분실량");
+        drawPieChart("#pieRain", monthlyRain, "월평균 강수량");
+
+
+
 
     </script>
     {% endif %}
@@ -690,6 +938,9 @@
             if (page > 0) {
                 page -= 1; 
                 pageChange();
+
+                nextBtn.innerHTML = "다음으로"
+                nextBtn.onclick = null
             }
         })
         nextBtn.addEventListener("click", () => { 
@@ -701,11 +952,7 @@
             //상세 페이지 이동 버튼
             if (page == 3) {
                 nextBtn.innerHTML = "상세 페이지로"
-                nextBtn.onclick = function() { window.location.href = "analysis/stats/";};
-            }
-            else {
-                nextBtn.innerHTML = "다음으로"
-                nextBtn.onclick = null
+                nextBtn.onclick = function() { window.location.href = "http://127.0.0.1:8000/analysis/stats/";};
             }
         })
 
@@ -801,13 +1048,33 @@
     <h1>상자 수염 그래프</h1>
     <svg id="boxPlot" width="600" height="400"></svg>
 
+    <p>강수량과 분실량 사이의 상관관계는 없는 것이 증명됐다. 그러나 비가 오는 날과 오지 않는 날의 차이는 있지 않을까?</p>
+    <p>
+        가설 2. 비 오는 날에는 비가 오지 않는 날보다 분실물 양이 많다. <br>
+        증명: 상자 수염 그래프의 상자가 비 오는 날이 비가 오지 않는 날보다 높다. <br>
+        결과: 상자 수염 그래프의 상자는 비 오는 날이 비가 오지 않는 날보다 낮다.
+    </p>
+    <p>
+        정리하자면, 이 그래프는 맑은 날의 분실물 수가 비 오는 날보다 일반적으로 많다는 것을 보여준다. 평균값(상자 가운데의 선)이 맑은 날이 더 높고, 상자 전체적으로도 맑은 날의 값이 더 높다. <br>
+        이어서 생각해보자. 강수량은 원인이 아니다. 그러면 왜 비 오는 날과 맑은 날의 차이가 발생하는 것일까?
+    </p>
+    <p>
+        가설 3. 맑은 날에는 인원수가 비 오는 날보다 많아서 분실물 양이 많아졌다. <br>
+        먼저 이 가설을 증명하려면 맑은 날이 비 오는 날보다 인원수가 많다는 것을 보여주어야 한다. 밑은 비 오는 날과 맑은 날, 그리고 인원수 사이의 상관관계 그래프이다.
+    </p>
+
+    <svg id="barChart" width="600" height="400"></svg>
+    <div class="tooltip"></div>
+
+    <p>그래프를 보면 맑은 날의 평균 인원수가 비 오는 날보다 많다는 것을 알 수 있다. 그러면 이제 인원수와 분실물 양 간의 상관관계를 증명할 차례다.</p>
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
         // Django에서 전달받은 리스트
         const dataRainy = {{ box_rainy_date|safe }};
         const dataNotRainy = {{ box_sunny_date|safe }};
 
-        const categories = ['Rainy', 'Not Rainy'];
+        const categories = ['비 오는 날', '맑은 날'];
         const allData = [dataRainy, dataNotRainy];
 
         const svg = d3.select("#boxPlot");
@@ -849,6 +1116,23 @@
                 .attr("y2", y(stats.upper))
                 .attr("stroke", "black");
 
+            const whiskerWidth = x.bandwidth() * 0.3;  // 수염 끝 가로선 길이
+
+            // lower whisker cap (아래 T 가로선)
+            svg.append("line")
+                .attr("x1", cx + x.bandwidth()/2 - whiskerWidth/2)
+                .attr("x2", cx + x.bandwidth()/2 + whiskerWidth/2)
+                .attr("y1", y(stats.lower))
+                .attr("y2", y(stats.lower))
+                .attr("stroke", "black");
+
+            // upper whisker cap (위 T 가로선)
+            svg.append("line")
+                .attr("x1", cx + x.bandwidth()/2 - whiskerWidth/2)
+                .attr("x2", cx + x.bandwidth()/2 + whiskerWidth/2)
+                .attr("y1", y(stats.upper))
+                .attr("y2", y(stats.upper))
+                .attr("stroke", "black");
             // 상자
             svg.append("rect")
                 .attr("x", cx)
@@ -880,12 +1164,90 @@
         // x축
         svg.append("g")
             .attr("transform", `translate(0, ${height})`)
-            .call(d3.axisBottom(x));
+            .call(d3.axisBottom(x))
+            .attr("font-size", "14px");
 
         // y축
         svg.append("g")
             .attr("transform", `translate(50, 0)`)
             .call(d3.axisLeft(y));
+        svg.append("text")
+            .attr("text-anchor", "middle")
+            .attr("transform", `translate(15, ${(height + 50) / 2}) rotate(-90)`)
+            .attr("font-size", "14px")
+            .text("분실물 수");
+    </script>
+    {{ regression_data|json_script:"data" }}
+    <script>
+        //인원수 그래프
+        const groupedData = d3.rollups(
+            JSON.parse(document.getElementById('data').textContent),
+            v => d3.mean(v, d => d.total_people), // 평균 계산
+            d => d.is_rainy ? "비 오는 날" : "맑은 날" // 그룹
+        );
+
+        // 객체 배열로 변환
+        const barData = groupedData.map(([weather, avgPeople]) => ({
+            weather,
+            avgPeople
+        }));
+
+        const svg2 = d3.select("#barChart")
+        const width2 = +svg2.attr("width") - 50;
+        const height2 = +svg2.attr("height") - 50;
+        const tooltip2 = d3.select(".tooltip");
+
+        // x축: 날씨
+        const x2 = d3.scaleBand()
+            .domain(barData.map(d => d.weather))
+            .range([0, width2])
+            .padding(0.4);
+
+        // y축: 평균 이용객 수
+        const y2 = d3.scaleLinear()
+            .domain([0, d3.max(barData, d => d.avgPeople) * 1.1])
+            .range([height2, 0]);
+
+        svg2.selectAll(".bar")
+            .data(barData)
+            .enter()
+            .append("rect")
+            .attr("class", "bar")
+            .attr("x", d => x2(d.weather)+90)
+            .attr("y", d => y2(d.avgPeople))
+            .attr("width", x2.bandwidth())
+            .attr("height", d => height2 - y2(d.avgPeople))
+            .attr("fill", d => d.weather === "비 오는 날" ? "steelblue" : "orange")
+            .on("mouseover", function(event, d) {
+                tooltip2.style("opacity", 1)
+                    .html(`${d.weather}<br>평균 이용객: ${d.avgPeople.toFixed(0)}`)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 20) + "px");
+            })
+            .on("mousemove", function(event) {
+                tooltip2.style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 20) + "px");
+            })
+            .on("mouseout", () => tooltip2.style("opacity", 0));
+
+        // x축
+        svg2.append("g")
+            .attr("transform", `translate(90, ${height2})`)
+            .call(d3.axisBottom(x2));
+
+        // y축
+        svg2.append("g")
+            .attr("transform", `translate(90, 0)`)
+            .call(d3.axisLeft(y2));
+
+        svg2.append("text")
+            .attr("x", - (height2 / 2))
+            .attr("y", 20)
+            .attr("transform", "rotate(-90)")
+            .attr("text-anchor", "middle")
+            .text("평균 이용객 수");
+
+
     </script>
 
     {% endif %}

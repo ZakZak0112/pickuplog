@@ -578,10 +578,22 @@ def analysis_view(request, section):
     box_sunny_date = conut_df[conut_df['is_rainy'] == False]['total_lost'].tolist()
 
     ##회귀 그래프 값 전달
-    print(final_df)
-    final_df['total_people'] = final_df['subway_boardings'] + final_df['subway_alightings'] + final_df['bus_boardings'] + final_df['bus_alightings']
-    regression_data = final_df[['total_people', 'total_lost', 'is_rainy']].to_dict(orient='records')
-    
+    cols = ['subway_boardings', 'subway_alightings', 'bus_boardings', 'bus_alightings']
+
+    # 네 개 중 하나라도 0이면 제외
+    filtered_df = final_df[final_df[cols].min(axis=1) > 0]
+
+    # total_people 계산
+    filtered_df['total_people'] = (
+        filtered_df['subway_boardings'] +
+        filtered_df['subway_alightings'] +
+        filtered_df['bus_boardings'] +
+        filtered_df['bus_alightings']
+    )
+
+    # 그래프 전달용 데이터
+    regression_data = filtered_df[['date', 'total_people', 'total_lost', 'is_rainy']] \
+                        .to_dict(orient='records')
 
     context ={
         'reports': reports,
