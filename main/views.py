@@ -9,6 +9,7 @@ from django.http import HttpResponse
 from datetime import datetime, timedelta, date
 from django.shortcuts import render
 import math
+import copy
 
 from django.shortcuts import render
 import pandas as pd
@@ -153,58 +154,6 @@ def lostitem_upload_csv(request):
 # ----------------------------------------------------------------------
 # 2. PickUpLog 핵심 뷰: 오늘의 분실 예보 (home) - ★ 최종 수정된 뷰
 # ----------------------------------------------------------------------
-def home(request):
-    """
-    PickUpLog 홈 화면 뷰: 오늘의 분실 예보 및 RII 기반 인사이트를 제공합니다.
-    """
-    # 1. 사용자 입력 및 기본 설정
-    line_input = request.GET.get('line', '선택') 
-    is_rainy_today = (request.GET.get('condition', '평소') == '비오는 날')
-    
-    # 2. RII 데이터 조회 및 평균 계산
-    try:
-        # DB에서 RII 평균을 계산 
-        avg_rii = RainImpactReport.objects.aggregate(avg_rii=Avg('rain_impact_index'))['avg_rii']
-    except Exception:
-        # 데이터가 없거나 모델 정의 오류 시 기본값 설정
-        avg_rii = 2.0 
-    
-    # 3. 핵심 예측 값 설정
-    
-    # ★ 요청하신 2.3배로 고정 설정
-    umbrella_impact_ratio = 2.3 
-    
-    # RII와 기본값(1.83)을 기반으로 오늘의 총 예상 분실률 계산 (가상 로직)
-    # RII가 높을수록 예측률 증가 (예: 1.83 + 0.1 * RII)
-    base_rate = 1.83
-    if avg_rii:
-        total_predicted_loss = base_rate + (avg_rii / 10)
-    else:
-        total_predicted_loss = base_rate
-    
-    
-    # 4. 템플릿으로 전달할 Context 구성
-    context = {
-        'line': line_input,
-        'current_date': timezone.now().date(),
-        'is_rainy_today': is_rainy_today,
-        
-        # ★ 최종 예측 문구에 필요한 핵심 값
-        'total_predicted_loss': round(total_predicted_loss, 2), # 오늘의 분실 예보 (Loss Rate per 10k)
-        'umbrella_impact_ratio': umbrella_impact_ratio, # 2.3배
-        
-        # 노선별 RII 상세 보고서 (템플릿 출력용)
-        'latest_reports': RainImpactReport.objects.order_by('line_code'), 
-        
-        # 이전 로직에서 사용되던 변수들 (템플릿과의 호환성을 위해 유지하거나 정리 필요)
-        'date_condition': request.GET.get('condition', '평소'),
-        'latest_date': RidershipDaily.objects.order_by('-date').values_list('date', flat=True).first(),
-        'items': [{'category': '우산', 'rate': 40.0}, {'category': '가방', 'rate': 30.0}], # 가상 데이터
-        # 'report' 딕셔너리 대신 context에 직접 풀어서 전달하도록 구조 변경됨
-    }
-    
-    return render(request, 'main/home.html', context)
-
 
 # ----------------------------------------------------------------------
 # 3. Archive View (분실물 데이터 아카이빙)
@@ -596,6 +545,44 @@ def analysis_view(request, section):
     p = (sum(rainy_lostitem_perPerson) + sum(sunny_lostitem_perPerson)) / (rainy_people + sunny_people)
     z_test = (sum(rainy_lostitem_perPerson) - sum(sunny_lostitem_perPerson)) / math.sqrt(p * (1-p) * (1/sum(rainy_lostitem_perPerson) + 1/sum(sunny_lostitem_perPerson)))
 
+    ##꺾은선그래프
+    lineGraph = conut_df
+    lineGraph['date'] = [d.strftime('%Y-%m-%d') for d in lineGraph['date']]
+    lineGraph = lineGraph.to_dict(orient='records')
+    lineGraph_weather = copy.deepcopy(lineGraph) #날씨 정보 lineGraph 복제
+
+    #lineGraph
+    for item in lineGraph: #키 이름 맞추기
+        if 'total_lost' in item:
+            item['value'] = item.pop('total_lost')
+
+    keys_to_keep = ['date', 'value'] 
+    for item in lineGraph:  #사용되는 키 제외하고 전부 삭제
+        for key in list(item.keys()): 
+            if key not in keys_to_keep:
+                item.pop(key)
+
+    #lineGraph_weater
+    for item in lineGraph_weather: #키 이름 맞추기
+        if 'rain_mm' in item:
+            item['value'] = item.pop('rain_mm')
+    
+    #(리스트는 같은 것 사용)
+    for item in lineGraph_weather:  #사용되는 키 제외하고 전부 삭제
+        for key in list(item.keys()): 
+            if key not in keys_to_keep:
+                item.pop(key)
+
+    ##상자수염그래프
+    box_rainy_date = conut_df[conut_df['is_rainy'] == True]['total_lost'].tolist()
+    box_sunny_date = conut_df[conut_df['is_rainy'] == False]['total_lost'].tolist()
+
+    ##회귀 그래프 값 전달
+    print(final_df)
+    final_df['total_people'] = final_df['subway_boardings'] + final_df['subway_alightings'] + final_df['bus_boardings'] + final_df['bus_alightings']
+    regression_data = final_df[['total_people', 'total_lost', 'is_rainy']].to_dict(orient='records')
+    
+
     context ={
         'reports': reports,
         'rain_list': rain_list,
@@ -617,7 +604,14 @@ def analysis_view(request, section):
         'categories': categories,
         'rainy_lostitem_perPerson': rainy_lostitem_perPerson,
         'sunny_lostitem_perPerson': sunny_lostitem_perPerson,
-        'z_test': z_test
+        'z_test': z_test,
+
+        'lineGraph': lineGraph,
+        'lineGraph_weather': lineGraph_weather,
+        'box_rainy_date': box_rainy_date,
+        'box_sunny_date': box_sunny_date,
+
+        'regression_data': regression_data
     }
 
     if section == 'table':
@@ -628,4 +622,6 @@ def analysis_view(request, section):
         context['show_stats'] = True
     elif section == 'visualization':
         context['show_visualization'] = True
+    elif section == 'boxPlot':
+        context['show_boxPlot'] = True
     return render(request, 'main/analysis.html', context)
