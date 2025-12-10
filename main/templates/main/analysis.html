@@ -194,9 +194,8 @@
     <button id="xRange2">제한된 범위</button>
 
     <p>
-        전체 범위에서는 회귀선이 거의 수평에 가까워 유의미한 데이터를 얻을 수 없었습니다. 그래서 데이터를 한정하여 범위를 좁혀 보았습니다. (버튼을 눌러 확인해 보세요) <br>
-        이를 통해 인원수와 분실물 수 간의 상관관계를 입증할 수 있습니다. <br>
-        회귀선이 우상향하므로 인원수와 분실물 수 간에는 양의 상관관계가 있습니다.
+        전체 범위에서는 회귀선이 거의 수평에 가까워 유의미한 데이터를 얻을 수 없다. 그래서 데이터를 한정하여 범위를 좁혔다. (버튼을 눌러 확인할 수 있습니다) <br>
+        제한된 범위에서 보았을 때, 회귀선이 우상향하므로 인원수와 분실물 수 간에는 양의 상관관계가 있다.
     </p>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -205,8 +204,8 @@
         const svg = d3.select("#regressionChart");
         const data = JSON.parse(document.getElementById('data').textContent);
 
-        let minX = 12000000; 
-        let maxX = 20000000;
+        let minX = d3.min(data, d => d.total_people);
+        let maxX = d3.max(data, d => d.total_people);
 
         const button1 = document.getElementById("xRange1");
         button1.addEventListener("click", function() {
@@ -371,9 +370,11 @@
     <svg id="pieLost" width="350" height="350"></svg>
     <svg id="pieRain" width="350" height="350"></svg>
     
-    <p>가정 1. 강수량과 분실물 수는 상관관계가 있다. 비가 많이 올수록 분실물 수가 늘어날 것이다.</p>
-    <p>증명: 강수량이 높은 달은 비가 오는 날이 많으므로 분실물 수가 늘어날 것이다.</p>
-    <p>결과: 강수량이 높은 달에도 낮은 달에도 분실물 수는 비슷하다. 가정 1은 틀렸다.</p>
+    <p>
+        가정 1. 강수량과 분실물 수는 상관관계가 있다. 비가 많이 올수록 분실물 수가 늘어날 것이다. <br>
+        증명: 따라서 강수량이 높은 달은 분실물 수가 늘어날 것이다. <br> 
+        결과: 강수량이 높은 달에도 낮은 달에도 분실물 수는 비슷하다. 가정 1은 틀렸다.
+    </p>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
