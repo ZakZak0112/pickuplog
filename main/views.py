@@ -8,6 +8,7 @@ from django.db import IntegrityError
 from django.http import HttpResponse
 from datetime import datetime, timedelta, date
 from django.shortcuts import render
+import math
 
 from django.shortcuts import render
 import pandas as pd
@@ -558,9 +559,42 @@ def analysis_view(request, section):
             
         i += 1
 
-        total_rainy_lostitem = final_df.loc[final_df['is_rainy'] == True, 'total_lost'].sum()
-        total_sunny_lostitem = final_df.loc[final_df['is_rainy'] == False, 'total_lost'].sum()
-        lostitem_percent_increse = total_sunny_lostitem / total_rainy_lostitem
+    #분모 집계
+    rainy_people = (
+        boardings_df.loc[final_df['is_rainy'] == True, 'total_boardings'].sum() +
+        alightings_df.loc[final_df['is_rainy'] == True, 'total_alightings'].sum()
+    )
+    sunny_people = (
+        boardings_df.loc[final_df['is_rainy'] == False, 'total_boardings'].sum() +
+        alightings_df.loc[final_df['is_rainy'] == False, 'total_alightings'].sum()
+    )
+    rainy_days = final_df['is_rainy'].sum()
+    sunny_days = final_df['is_rainy'].sum()
+
+    conut_df = pd.merge(final_df, lost_df, on='date', how='left')
+    # 카테고리별 분실물 집계
+    rainy_category_counts = (
+        conut_df[conut_df['is_rainy'] == True]
+        .groupby('category')['total_lost']
+        .sum()
+    )
+    sunny_category_counts = (
+        conut_df[conut_df['is_rainy'] == False]
+        .groupby('category')['total_lost']
+        .sum()
+    )
+
+    #분실률 계산
+    rainy_lostitem_perDay = (rainy_category_counts / rainy_days).tolist()
+    sunny_lostitem_perDay = (sunny_category_counts / sunny_days).tolist()
+    rainy_lostitem_perPerson = (rainy_category_counts / rainy_people).tolist()
+    sunny_lostitem_perPerson = (sunny_category_counts / sunny_people).tolist()
+    categories = rainy_category_counts.index.tolist()
+
+    #분실량 차이
+    lostitem_percent_increse = sum(sunny_lostitem_perDay) / sum(rainy_lostitem_perDay)
+    p = (sum(rainy_lostitem_perPerson) + sum(sunny_lostitem_perPerson)) / (rainy_people + sunny_people)
+    z_test = (sum(rainy_lostitem_perPerson) - sum(sunny_lostitem_perPerson)) / math.sqrt(p * (1-p) * (1/sum(rainy_lostitem_perPerson) + 1/sum(sunny_lostitem_perPerson)))
 
     context ={
         'reports': reports,
@@ -568,6 +602,7 @@ def analysis_view(request, section):
         'lost_list': lost_list,
         'regression_line': regression_line,
         'stats': stats,
+
         'total_boardings': json.dumps(total_boardings_dict),
         'total_alightings': json.dumps(total_alightings_dict),
         'recent_rainy': recent_rainy,
@@ -575,9 +610,14 @@ def analysis_view(request, section):
         'recent_rainy_lostitem': recent_rainy_lostitem,
         'recent_sunny_lostitem': recent_sunny_lostitem,
         'recent_rain_mm': recent_rain_mm,
-        'total_sunny_lostitem': total_sunny_lostitem,
-        'total_rainy_lostitem': total_rainy_lostitem,
-        'lostitem_percent_increse':lostitem_percent_increse
+
+        'sunny_lostitem_perDay': sunny_lostitem_perDay,
+        'rainy_lostitem_perDay': rainy_lostitem_perDay,
+        'lostitem_percent_increse':lostitem_percent_increse,
+        'categories': categories,
+        'rainy_lostitem_perPerson': rainy_lostitem_perPerson,
+        'sunny_lostitem_perPerson': sunny_lostitem_perPerson,
+        'z_test': z_test
     }
 
     if section == 'table':
