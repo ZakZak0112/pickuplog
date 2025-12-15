@@ -398,28 +398,26 @@
             .domain(d3.extent(allData, d => d.date))
             .range([50, width]);
 
-        const y = d3.scaleLinear()
-                    .domain([0, d3.max(allData, d => d.value)])
-                    .range([height, 50]);
+        // y축 (왼쪽: 분실물 수)
+        const yLeft = d3.scaleLinear()
+            .domain([0, d3.max(data1, d => d.value)])
+            .nice()
+            .range([height, 50]);
+
+        // y축 (오른쪽: 강수량)
+        const yRight = d3.scaleLinear()
+            .domain([0, d3.max(data2, d => d.value)])
+            .nice()
+            .range([height, 50]);
+
                     
-        const line = d3.line()
-               .x(d => x(d.date))
-               .y(d => y(d.value));
+        const lineLost = d3.line()
+            .x(d => x(d.date))
+            .y(d => yLeft(d.value));
 
-        // 그래프 그리기
-        svg.append("path")
-            .datum(data1)
-            .attr("fill", "none")
-            .attr("stroke", "steelblue")
-            .attr("stroke-width", 2)
-            .attr("d", line);
-
-        svg.append("path")
-            .datum(data2)
-            .attr("fill", "none")
-            .attr("stroke", "orange")
-            .attr("stroke-width", 2)
-            .attr("d", line);
+        const lineRain = d3.line()
+            .x(d => x(d.date))
+            .y(d => yRight(d.value));
         
         //x축
         svg.append("g")
@@ -432,15 +430,48 @@
             .attr("font-size", "14px")
             .text("날짜");
         
-        //y축
+        // 분실물 (왼쪽 y축)
+        svg.append("path")
+            .datum(data1)
+            .attr("fill", "none")
+            .attr("stroke", "steelblue")
+            .attr("stroke-width", 2)
+            .attr("d", lineLost);
+    
         svg.append("g")
-            .attr("transform", `translate(50, 0)`)
-            .call(d3.axisLeft(y));
+            .attr("transform", "translate(50, 0)")
+            .call(d3.axisLeft(yLeft));
+
         svg.append("text")
             .attr("text-anchor", "middle")
             .attr("transform", `translate(15, ${(height + 50) / 2}) rotate(-90)`)
             .attr("font-size", "14px")
-            .text("분실물 수/강수량");
+            .attr("fill", "steelblue")
+            .text("분실물 수");
+
+        // 강수량 (오른쪽 y축)
+        svg.append("path")
+            .datum(data2)
+            .attr("fill", "none")
+            .attr("stroke", "orange")
+            .attr("stroke-width", 2)
+            .attr("d", lineRain);
+
+        svg.append("g")
+            .attr("transform", `translate(${width}, 0)`)
+            .call(d3.axisRight(yRight));
+
+        svg.append("text")
+            .attr("text-anchor", "middle")
+            .attr(
+                "transform",
+                `translate(${width + 35}, ${(height + 50) / 2}) rotate(-90)`
+            )
+            .attr("font-size", "14px")
+            .attr("fill", "orange")
+            .text("강수량");
+
+
 
         //라벨 붙이기
         const legend = svg.append("g")
@@ -473,53 +504,28 @@
         //툴팁 추가
         const tooltip = d3.select(".tooltip");
 
+        // 분실물 점
         svg.selectAll(".dot1")
-        .data(data1)
-        .enter()
-        .append("circle")
-        .attr("class", "dot1")
-        .attr("cx", d => x(d.date))
-        .attr("cy", d => y(d.value))
-        .attr("r", 4)
-        .attr("fill", "steelblue")
-        .on("mouseover", function(event, d) {
-            tooltip.style("opacity", 1)
-                .html(
-                    `<b>${d3.timeFormat("%Y-%m-%d")(d.date)}</b><br>
-                     총 분실물: ${d.value}`
-                );
-        })
-        .on("mousemove", function(event) {
-            tooltip.style("left", (event.pageX + 15) + "px")
-                   .style("top", (event.pageY - 20) + "px");
-        })
-        .on("mouseout", function() {
-            tooltip.style("opacity", 0);
-        });
+            .data(data1)
+            .enter()
+            .append("circle")
+            .attr("class", "dot1")
+            .attr("cx", d => x(d.date))
+            .attr("cy", d => yLeft(d.value))
+            .attr("r", 4)
+            .attr("fill", "steelblue");
 
+        // 강수량 점
         svg.selectAll(".dot2")
-        .data(data2)
-        .enter()
-        .append("circle")
-        .attr("class", "dot2")
-        .attr("cx", d => x(d.date))
-        .attr("cy", d => y(d.value))
-        .attr("r", 4)
-        .attr("fill", "orange")
-        .on("mouseover", function(event, d) {
-            tooltip.style("opacity", 1)
-                .html(
-                    `<b>${d3.timeFormat("%Y-%m-%d")(d.date)}</b><br>
-                     강수량: ${d.value}`
-                );
-        })
-        .on("mousemove", function(event) {
-            tooltip.style("left", (event.pageX + 15) + "px")
-                   .style("top", (event.pageY - 20) + "px");
-        })
-        .on("mouseout", function() {
-            tooltip.style("opacity", 0);
-        });
+            .data(data2)
+            .enter()
+            .append("circle")
+            .attr("class", "dot2")
+            .attr("cx", d => x(d.date))
+            .attr("cy", d => yRight(d.value))
+            .attr("r", 4)
+            .attr("fill", "orange");
+
 
         //월별 파이 차트
         function groupByMonth(data) {
@@ -586,9 +592,6 @@
         // 파이 차트 적용
         drawPieChart("#pieLost", monthlyLost, "월평균 분실량");
         drawPieChart("#pieRain", monthlyRain, "월평균 강수량");
-
-
-
 
     </script>
     {% endif %}
