@@ -526,8 +526,8 @@
             .attr("r", 4)
             .attr("fill", "orange");
 
-
-        //월별 파이 차트
+        //-----월별 파이 차트-----
+        // 월별 집계 함수
         function groupByMonth(data) {
             const monthly = d3.rollups(
                 data,
@@ -541,57 +541,54 @@
             }));
         }
 
-        const pie = d3.pie().value(d => d.value);
-        const arc = d3.arc().innerRadius(0).outerRadius(150);
-        const color = d3.scaleOrdinal(d3.schemeCategory10);  // 기본 10색 팔레트
-
-        function drawPieChart(svgId, dataset, title) {
-
-            const svg = d3.select(svgId)
-                        .attr("width", 350)
-                        .attr("height", 350)
-                        .append("g")
-                        .attr("transform", "translate(175,190)");
-
-            const arcs = pie(dataset);
-
-            svg.selectAll("path")
-                .data(arcs)
-                .enter()
-                .append("path")
-                .attr("d", arc)
-                .attr("fill", (d, i) => color(i))
-                .style("cursor", "pointer")
-                .on("mouseover", function (event, d) {
-                    tooltip.style("opacity", 1);
-                    tooltip.html(
-                        `${title}<br>${d.data.month}<br>값: ${d.data.value}`
-                    )
-                    .style("left", (event.pageX + 10) + "px")
-                    .style("top", (event.pageY - 20) + "px");
-                })
-                .on("mouseout", () => tooltip.style("opacity", 0));
-
-            // Title
-            svg.append("text")
-                .attr("text-anchor", "middle")
-                .attr("y", -160)
-                .attr("font-size", "16px")
-                .text(title);
+        // Donut3D용 데이터 준비
+        function prepareDonutData(monthlyData) {
+            return monthlyData.map((d, i) => ({
+                value: d.value,
+                color: d3.schemeCategory10[i % 10],
+                label: d.month
+            }));
         }
 
         // 날짜 파싱
-        [data1, data2].forEach(arr => {
-            arr.forEach(d => d.date = parseDate(d.date));
-        });
+        [data1, data2].forEach(arr => arr.forEach(d => d.date = parseDate(d.date)));
 
         // 월별 집계
-        const monthlyLost = groupByMonth(data1);
-        const monthlyRain = groupByMonth(data2);
+        const monthlyLost = prepareDonutData(groupByMonth(data1));
+        const monthlyRain = prepareDonutData(groupByMonth(data2));
+    </script>
 
-        // 파이 차트 적용
-        drawPieChart("#pieLost", monthlyLost, "월평균 분실량");
-        drawPieChart("#pieRain", monthlyRain, "월평균 강수량");
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="/static/js/Donut3D.js"></script>
+    <script>
+        // Donut3D 입체 도넛 차트 그리기
+        Donut3D.draw("pieLost", monthlyLost, 175, 175, 150, 90, 30, 0);
+        Donut3D.draw("pieRain", monthlyRain, 175, 175, 150, 90, 30, 0);
+
+        //글씨 색 바꾸기
+        d3.selectAll("#pieLost .percent, #pieRain .percent")
+            .attr("fill", "white")
+            .attr("font-size", "14px")
+            .attr("font-weight", "bold");
+
+    </script>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        // 툴팁 적용 (.topSlice 대상)
+        function addTooltip(svgId) {
+            d3.selectAll("#" + svgId + " .topSlice")
+            .on("mouseover", function(event, d) {
+                tooltip.style("opacity", 1)
+                        .html(`${d.data.label}<br>값: ${d.data.value}`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 20) + "px");
+            })
+            .on("mouseout", () => tooltip.style("opacity", 0));
+        }
+
+        addTooltip("pieLost");
+        addTooltip("pieRain");
 
     </script>
     {% endif %}
