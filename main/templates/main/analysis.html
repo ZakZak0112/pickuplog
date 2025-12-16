@@ -1048,7 +1048,8 @@
     {% if show_boxPlot %}
     <h1>상자 수염 그래프</h1>
     <svg id="boxPlot" width="600" height="400"></svg>
-
+    <p>추가: 비가 오는 날은 위로 갈수록 바이올린 차트의 가로폭이 줄어들지만, 맑은 날은 그렇지 않다. 따라서 맑은 날의 분실물 수 빈도가 더 높음을 알 수 있다.</p>
+    
     <p>강수량과 분실량 사이의 상관관계는 없는 것이 증명됐다. 그러나 비가 오는 날과 오지 않는 날의 차이는 있지 않을까?</p>
     <p>
         가설 2. 비 오는 날에는 비가 오지 않는 날보다 분실물 양이 많다. <br>
@@ -1071,113 +1072,163 @@
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
-        // Django에서 전달받은 리스트
+        /* ======================
+        1. 데이터 (절대 수정 X)
+        ====================== */
         const dataRainy = {{ box_rainy_date|safe }};
         const dataNotRainy = {{ box_sunny_date|safe }};
 
-        const categories = ['비 오는 날', '맑은 날'];
-        const allData = [dataRainy, dataNotRainy];
+        const groups = [
+        { name: "비 오는 날", values: dataRainy, color: "steelblue" },
+        { name: "맑은 날", values: dataNotRainy, color: "orange" }
+        ];
 
+        /* ======================
+        2. 기본 세팅
+        ====================== */
         const svg = d3.select("#boxPlot");
-        const width = +svg.attr("width") - 50;
-        const height = +svg.attr("height") - 50;
+        const margin = { top: 30, right: 30, bottom: 40, left: 60 };
+        const width = +svg.attr("width") - margin.left - margin.right;
+        const height = +svg.attr("height") - margin.top - margin.bottom;
+
+        const g = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
 
         const x = d3.scaleBand()
-            .domain(categories)
-            .range([50, width])
-            .padding(0.4);
+        .domain(groups.map(d => d.name))
+        .range([0, width])
+        .padding(0.5);
 
         const y = d3.scaleLinear()
-            .domain([0, d3.max(allData.flat()) * 1.1])
-            .range([height, 50]);
+        .domain([0, d3.max(groups.flatMap(d => d.values)) * 1.1])
+        .range([height, 0]);
 
-        // 상자 수염 계산 함수
-        function boxStats(values) {
-            values.sort(d3.ascending);
-            const q1 = d3.quantile(values, 0.25);
-            const median = d3.quantile(values, 0.5);
-            const q3 = d3.quantile(values, 0.75);
-            const iqr = q3 - q1;
-            const lower = d3.max([d3.min(values), q1 - 1.5 * iqr]);
-            const upper = d3.min([d3.max(values), q3 + 1.5 * iqr]);
-            const outliers = values.filter(v => v < lower || v > upper);
-            return {q1, median, q3, lower, upper, outliers};
+        /* ======================
+        3. KDE (바이올린)
+        ====================== */
+        function kernelDensityEstimator(kernel, X) {
+        return V => X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
         }
 
-        // 상자 수염 그리기
-        allData.forEach((values, i) => {
-            const stats = boxStats(values);
-            const cx = x(categories[i]);
+        function kernelEpanechnikov(k) {
+        return v => Math.abs(v /= k) <= 1 ? 0.75 * (1 - v * v) / k : 0;
+        }
 
-            // 수염
-            svg.append("line")
-                .attr("x1", cx + x.bandwidth()/2)
-                .attr("x2", cx + x.bandwidth()/2)
-                .attr("y1", y(stats.lower))
-                .attr("y2", y(stats.upper))
-                .attr("stroke", "black");
+        const kde = kernelDensityEstimator(
+        kernelEpanechnikov(7),
+        y.ticks(40)
+        );
 
-            const whiskerWidth = x.bandwidth() * 0.3;  // 수염 끝 가로선 길이
+        /* ======================
+        4. 바이올린 차트
+        ====================== */
+        groups.forEach(group => {
+        const density = kde(group.values);
+        const maxDensity = d3.max(density, d => d[1]);
 
-            // lower whisker cap (아래 T 가로선)
-            svg.append("line")
-                .attr("x1", cx + x.bandwidth()/2 - whiskerWidth/2)
-                .attr("x2", cx + x.bandwidth()/2 + whiskerWidth/2)
-                .attr("y1", y(stats.lower))
-                .attr("y2", y(stats.lower))
-                .attr("stroke", "black");
+        const xNum = d3.scaleLinear()
+            .range([0, x.bandwidth()])
+            .domain([-maxDensity, maxDensity]);
 
-            // upper whisker cap (위 T 가로선)
-            svg.append("line")
-                .attr("x1", cx + x.bandwidth()/2 - whiskerWidth/2)
-                .attr("x2", cx + x.bandwidth()/2 + whiskerWidth/2)
-                .attr("y1", y(stats.upper))
-                .attr("y2", y(stats.upper))
-                .attr("stroke", "black");
-            // 상자
-            svg.append("rect")
-                .attr("x", cx)
-                .attr("y", y(stats.q3))
-                .attr("width", x.bandwidth())
-                .attr("height", y(stats.q1) - y(stats.q3))
-                .attr("fill", i === 0 ? "steelblue" : "orange")
-                .attr("stroke", "black");
-
-            // 중앙값
-            svg.append("line")
-                .attr("x1", cx)
-                .attr("x2", cx + x.bandwidth())
-                .attr("y1", y(stats.median))
-                .attr("y2", y(stats.median))
-                .attr("stroke", "black");
-
-            // 이상치
-            svg.selectAll(`.outlier-${i}`)
-                .data(stats.outliers)
-                .enter()
-                .append("circle")
-                .attr("cx", cx + x.bandwidth()/2)
-                .attr("cy", d => y(d))
-                .attr("r", 3)
-                .attr("fill", "red");
+        g.append("path")
+            .datum(density)
+            .attr("transform", `translate(${x(group.name)},0)`)
+            .attr("fill", group.color)
+            .attr("opacity", 0.4)
+            .attr("stroke", "none")
+            .attr("d", d3.area()
+            .x0(d => xNum(-d[1]))
+            .x1(d => xNum(d[1]))
+            .y(d => y(d[0]))
+            .curve(d3.curveCatmullRom)
+            );
         });
 
-        // x축
-        svg.append("g")
-            .attr("transform", `translate(0, ${height})`)
-            .call(d3.axisBottom(x))
-            .attr("font-size", "14px");
+        /* ======================
+        5. 점 (클라우드)
+        ====================== */
+        groups.forEach(group => {
+        g.selectAll(`.dot-${group.name}`)
+            .data(group.values)
+            .enter()
+            .append("circle")
+            .attr("cx", () =>
+            x(group.name) + x.bandwidth() / 2 +
+            (Math.random() - 0.5) * x.bandwidth() * 0.35
+            )
+            .attr("cy", d => y(d))
+            .attr("r", 3)
+            .attr("fill", group.color)
+            .attr("opacity", 0.5);
+        });
 
-        // y축
-        svg.append("g")
-            .attr("transform", `translate(50, 0)`)
-            .call(d3.axisLeft(y));
-        svg.append("text")
-            .attr("text-anchor", "middle")
-            .attr("transform", `translate(15, ${(height + 50) / 2}) rotate(-90)`)
-            .attr("font-size", "14px")
-            .text("분실물 수");
+        /* ======================
+        6. 상자 수염 (검정색 유지)
+        ====================== */
+        function boxStats(values) {
+        const sorted = values.slice().sort(d3.ascending);
+        const q1 = d3.quantile(sorted, 0.25);
+        const median = d3.quantile(sorted, 0.5);
+        const q3 = d3.quantile(sorted, 0.75);
+        const iqr = q3 - q1;
+        const min = Math.max(d3.min(sorted), q1 - 1.5 * iqr);
+        const max = Math.min(d3.max(sorted), q3 + 1.5 * iqr);
+        return { q1, median, q3, min, max };
+        }
+
+        groups.forEach(group => {
+        const stats = boxStats(group.values);
+        const cx = x(group.name) + x.bandwidth() / 2;
+        const boxWidth = x.bandwidth() * 0.25;
+
+        // 수염
+        g.append("line")
+            .attr("x1", cx)
+            .attr("x2", cx)
+            .attr("y1", y(stats.min))
+            .attr("y2", y(stats.max))
+            .attr("stroke", "black")
+            .attr("stroke-width", 1);
+
+        // 상자 (채우지 않음)
+        g.append("rect")
+            .attr("x", cx - boxWidth / 2)
+            .attr("y", y(stats.q3))
+            .attr("width", boxWidth)
+            .attr("height", y(stats.q1) - y(stats.q3))
+            .attr("fill", "none")
+            .attr("stroke", "black")
+            .attr("stroke-width", 1);
+
+        // 중앙값
+        g.append("line")
+            .attr("x1", cx - boxWidth / 2)
+            .attr("x2", cx + boxWidth / 2)
+            .attr("y1", y(stats.median))
+            .attr("y2", y(stats.median))
+            .attr("stroke", "black")
+            .attr("stroke-width", 1);
+        });
+
+        /* ======================
+        7. 축
+        ====================== */
+        g.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x));
+
+        g.append("g")
+        .call(d3.axisLeft(y));
+
+        g.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", -45)
+        .attr("x", -height / 2)
+        .attr("text-anchor", "middle")
+        .text("분실물 수");
     </script>
+
+
     {{ regression_data|json_script:"data" }}
     <script>
         //인원수 그래프
