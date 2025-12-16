@@ -8,6 +8,8 @@ from django.db import IntegrityError
 from django.http import HttpResponse
 from datetime import datetime, timedelta, date
 from django.shortcuts import render
+import math
+import copy
 
 from django.shortcuts import render
 import pandas as pd
@@ -152,58 +154,6 @@ def lostitem_upload_csv(request):
 # ----------------------------------------------------------------------
 # 2. PickUpLog 핵심 뷰: 오늘의 분실 예보 (home) - ★ 최종 수정된 뷰
 # ----------------------------------------------------------------------
-def home(request):
-    """
-    PickUpLog 홈 화면 뷰: 오늘의 분실 예보 및 RII 기반 인사이트를 제공합니다.
-    """
-    # 1. 사용자 입력 및 기본 설정
-    line_input = request.GET.get('line', '선택') 
-    is_rainy_today = (request.GET.get('condition', '평소') == '비오는 날')
-    
-    # 2. RII 데이터 조회 및 평균 계산
-    try:
-        # DB에서 RII 평균을 계산 
-        avg_rii = RainImpactReport.objects.aggregate(avg_rii=Avg('rain_impact_index'))['avg_rii']
-    except Exception:
-        # 데이터가 없거나 모델 정의 오류 시 기본값 설정
-        avg_rii = 2.0 
-    
-    # 3. 핵심 예측 값 설정
-    
-    # ★ 요청하신 2.3배로 고정 설정
-    umbrella_impact_ratio = 2.3 
-    
-    # RII와 기본값(1.83)을 기반으로 오늘의 총 예상 분실률 계산 (가상 로직)
-    # RII가 높을수록 예측률 증가 (예: 1.83 + 0.1 * RII)
-    base_rate = 1.83
-    if avg_rii:
-        total_predicted_loss = base_rate + (avg_rii / 10)
-    else:
-        total_predicted_loss = base_rate
-    
-    
-    # 4. 템플릿으로 전달할 Context 구성
-    context = {
-        'line': line_input,
-        'current_date': timezone.now().date(),
-        'is_rainy_today': is_rainy_today,
-        
-        # ★ 최종 예측 문구에 필요한 핵심 값
-        'total_predicted_loss': round(total_predicted_loss, 2), # 오늘의 분실 예보 (Loss Rate per 10k)
-        'umbrella_impact_ratio': umbrella_impact_ratio, # 2.3배
-        
-        # 노선별 RII 상세 보고서 (템플릿 출력용)
-        'latest_reports': RainImpactReport.objects.order_by('line_code'), 
-        
-        # 이전 로직에서 사용되던 변수들 (템플릿과의 호환성을 위해 유지하거나 정리 필요)
-        'date_condition': request.GET.get('condition', '평소'),
-        'latest_date': RidershipDaily.objects.order_by('-date').values_list('date', flat=True).first(),
-        'items': [{'category': '우산', 'rate': 40.0}, {'category': '가방', 'rate': 30.0}], # 가상 데이터
-        # 'report' 딕셔너리 대신 context에 직접 풀어서 전달하도록 구조 변경됨
-    }
-    
-    return render(request, 'main/home.html', context)
-
 
 # ----------------------------------------------------------------------
 # 3. Archive View (분실물 데이터 아카이빙)
@@ -391,9 +341,7 @@ def insight_report(request):
 
 
 #날씨별, 노선별, 역별 분실물 + 승하차 인원 집계 뷰
-def lostitem_analysis_view(request):
-    print("호출테스트1")
-
+def analysis_view(request, section):
     #LostItem 불러오기
     lostitems = LostItem.objects.all().values(
         'registered_at', 'category'
@@ -405,8 +353,6 @@ def lostitem_analysis_view(request):
 
     lost_df['date'] = pd.to_datetime(lost_df['registered_at']).dt.date
     lost_df['category'] = lost_df['category'].fillna('기타')
-
-    print("호출테스트2")
 
     # 날짜별 + 카테고리별 pivot
     pivot_df = lost_df.pivot_table(
@@ -544,7 +490,7 @@ def lostitem_analysis_view(request):
         },
     }
 
-    ##6) 템플릿 전달
+    #=====템플릿 전달=====
     reports = final_df.to_dict(orient='records')
 
     recent_rainy = 0
@@ -559,20 +505,149 @@ def lostitem_analysis_view(request):
             elif not reports[i]['is_rainy']:
                 recent_sunny = reports[i]['date']
                 recent_sunny_lostitem = reports[i]['total_lost']
+            
         i += 1
+
+    #분모 집계
+    rainy_people = (
+        boardings_df.loc[final_df['is_rainy'] == True, 'total_boardings'].sum() +
+        alightings_df.loc[final_df['is_rainy'] == True, 'total_alightings'].sum()
+    )
+    sunny_people = (
+        boardings_df.loc[final_df['is_rainy'] == False, 'total_boardings'].sum() +
+        alightings_df.loc[final_df['is_rainy'] == False, 'total_alightings'].sum()
+    )
+    rainy_days = final_df['is_rainy'].sum()
+    sunny_days = final_df['is_rainy'].sum()
+
+    conut_df = pd.merge(final_df, lost_df, on='date', how='left')
+    # 카테고리별 분실물 집계
+    rainy_category_counts = (
+        conut_df[conut_df['is_rainy'] == True]
+        .groupby('category')['total_lost']
+        .sum()
+    )
+    sunny_category_counts = (
+        conut_df[conut_df['is_rainy'] == False]
+        .groupby('category')['total_lost']
+        .sum()
+    )
+
+    #분실률 계산
+    rainy_lostitem_perDay = (rainy_category_counts / rainy_days).tolist()
+    sunny_lostitem_perDay = (sunny_category_counts / sunny_days).tolist()
+    rainy_lostitem_perPerson = (rainy_category_counts / rainy_people).tolist()
+    sunny_lostitem_perPerson = (sunny_category_counts / sunny_people).tolist()
+    categories = rainy_category_counts.index.tolist()
+
+    #분실량 차이
+    lostitem_percent_increse = sum(sunny_lostitem_perDay) / sum(rainy_lostitem_perDay)
+    p = (sum(rainy_lostitem_perPerson) + sum(sunny_lostitem_perPerson)) / (rainy_people + sunny_people)
+    z_test = (sum(rainy_lostitem_perPerson) - sum(sunny_lostitem_perPerson)) / math.sqrt(p * (1-p) * (1/sum(rainy_lostitem_perPerson) + 1/sum(sunny_lostitem_perPerson)))
+
+    #-----꺾은선그래프-----
+    lineGraph = conut_df
+    lineGraph['date'] = [d.strftime('%Y-%m-%d') for d in lineGraph['date']]
+    lineGraph = lineGraph.to_dict(orient='records')
+    lineGraph_weather = copy.deepcopy(lineGraph) #날씨 정보 lineGraph 복제
+
+    #lineGraph
+    for item in lineGraph: #키 이름 맞추기
+        if 'total_lost' in item:
+            item['value'] = item.pop('total_lost')
+
+    keys_to_keep = ['date', 'value'] 
+    for item in lineGraph:  #사용되는 키 제외하고 전부 삭제
+        for key in list(item.keys()): 
+            if key not in keys_to_keep:
+                item.pop(key)
+
+    #lineGraph_weater
+    for item in lineGraph_weather: #키 이름 맞추기
+        if 'rain_mm' in item:
+            item['value'] = item.pop('rain_mm')
     
-    print("호출테스트2")
-    return render(request, 'main/analysis.html', {
+    #(리스트는 같은 것 사용)
+    for item in lineGraph_weather:  #사용되는 키 제외하고 전부 삭제
+        for key in list(item.keys()): 
+            if key not in keys_to_keep:
+                item.pop(key)
+
+    #-----상자수염그래프-----
+    box_rainy_date = conut_df[conut_df['is_rainy'] == True]['total_lost'].tolist()
+    box_sunny_date = conut_df[conut_df['is_rainy'] == False]['total_lost'].tolist()
+
+
+    #-----회귀 그래프 값 전달-----
+    cols = ['subway_boardings', 'subway_alightings', 'bus_boardings', 'bus_alightings']
+
+    # 네 개 중 하나라도 0이면 제외
+    filtered_df = final_df[final_df[cols].min(axis=1) > 0]
+
+    # total_people 계산
+    filtered_df['total_people'] = (
+        filtered_df['subway_boardings'] +
+        filtered_df['subway_alightings'] +
+        filtered_df['bus_boardings'] +
+        filtered_df['bus_alightings']
+    )
+
+    # 그래프 전달용 데이터
+    regression_data = filtered_df[['date', 'total_people', 'total_lost', 'is_rainy']] \
+                        .to_dict(orient='records')
+
+    #-----덤벨 차트-----
+    dumbbell_rainy = (rainy_category_counts / rainy_days).to_dict()
+    dumbbell_sunny = (sunny_category_counts / sunny_days).to_dict()
+    print(dumbbell_rainy)
+    print(dumbbell_sunny)
+
+    #-----전달-----
+    context ={
         'reports': reports,
         'rain_list': rain_list,
         'lost_list': lost_list,
         'regression_line': regression_line,
         'stats': stats,
+
         'total_boardings': json.dumps(total_boardings_dict),
         'total_alightings': json.dumps(total_alightings_dict),
         'recent_rainy': recent_rainy,
         'recent_sunny': recent_sunny,
         'recent_rainy_lostitem': recent_rainy_lostitem,
         'recent_sunny_lostitem': recent_sunny_lostitem,
-        'recent_rain_mm': recent_rain_mm
-    })
+        'recent_rain_mm': recent_rain_mm,
+
+        'sunny_lostitem_perDay': sunny_lostitem_perDay,
+        'rainy_lostitem_perDay': rainy_lostitem_perDay,
+        'lostitem_percent_increse':lostitem_percent_increse,
+        'categories': categories,
+        'rainy_lostitem_perPerson': rainy_lostitem_perPerson,
+        'sunny_lostitem_perPerson': sunny_lostitem_perPerson,
+        'z_test': z_test,
+
+        'lineGraph': lineGraph,
+        'lineGraph_weather': lineGraph_weather,
+        'box_rainy_date': box_rainy_date,
+        'box_sunny_date': box_sunny_date,
+
+        'regression_data': regression_data,
+
+        'dumbbell_rainy': dumbbell_rainy,
+        'dumbbell_sunny': dumbbell_sunny
+    }
+
+    if section == 'table':
+        context['show_table'] = True
+    elif section == 'regression':
+        context['show_regression'] = True
+    elif section == 'stats':
+        context['show_stats'] = True
+    elif section == 'visualization':
+        context['show_visualization'] = True
+    elif section == 'boxPlot':
+        context['show_boxPlot'] = True
+    elif section == 'dumbbellPlot':
+        context['show_dumbbellPlot'] = True
+
+    return render(request, 'main/analysis.html', context)

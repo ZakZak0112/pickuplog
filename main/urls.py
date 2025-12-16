@@ -3,10 +3,7 @@ from main import views
 
 urlpatterns = [
     # 1. Home 및 분석 페이지 연결
-    path('', views.home, name='home'),
-    path('trend/', views.trend_analysis, name='trend'), 
-    path('correlation/', views.correlation_analysis, name='correlation'),
-    path('insight/', views.insight_report, name='insight'),
+    path('', views.analysis_view, {'section': 'visualization'}, name='analysis_visualization'),
 
     # 2. LostItem CRUD 및 아카이브 연결
     path('archive/lostitem/', views.lostitem_list, name='lostitem_list'), 
@@ -15,7 +12,9 @@ urlpatterns = [
     path('archive/lostitem/upload/csv/', views.lostitem_upload_csv, name='lostitem_upload_csv'), 
 
     #추가 분석 페이지
-    path('weather-report/', views.lostitem_analysis_view, name='weather_lostitem_report'),
-
-
+    path('analysis/table/', views.analysis_view, {'section': 'table'}, name='analysis_table'),
+    path('analysis/stats/', views.analysis_view, {'section': 'stats'}, name='analysis_stats'),
+    path('analysis/boxPlot/', views.analysis_view, {'section': 'boxPlot'}, name='analysis_boxPlot'),
+    path('analysis/regression/', views.analysis_view, {'section': 'regression'}, name='analysis_regression'),
+    path('analysis/dumbbell/', views.analysis_view, {'section': 'dumbbellPlot'}, name='analysis_dumbbell'),
 ]
