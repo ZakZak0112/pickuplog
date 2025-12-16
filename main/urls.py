@@ -16,4 +16,5 @@ urlpatterns = [
     path('analysis/stats/', views.analysis_view, {'section': 'stats'}, name='analysis_stats'),
     path('analysis/boxPlot/', views.analysis_view, {'section': 'boxPlot'}, name='analysis_boxPlot'),
     path('analysis/regression/', views.analysis_view, {'section': 'regression'}, name='analysis_regression'),
+    path('analysis/dumbbell/', views.analysis_view, {'section': 'dumbbellPlot'}, name='analysis_dumbbell'),
 ]

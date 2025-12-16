@@ -490,7 +490,7 @@ def analysis_view(request, section):
         },
     }
 
-    ##6) 템플릿 전달
+    #=====템플릿 전달=====
     reports = final_df.to_dict(orient='records')
 
     recent_rainy = 0
@@ -545,7 +545,7 @@ def analysis_view(request, section):
     p = (sum(rainy_lostitem_perPerson) + sum(sunny_lostitem_perPerson)) / (rainy_people + sunny_people)
     z_test = (sum(rainy_lostitem_perPerson) - sum(sunny_lostitem_perPerson)) / math.sqrt(p * (1-p) * (1/sum(rainy_lostitem_perPerson) + 1/sum(sunny_lostitem_perPerson)))
 
-    ##꺾은선그래프
+    #-----꺾은선그래프-----
     lineGraph = conut_df
     lineGraph['date'] = [d.strftime('%Y-%m-%d') for d in lineGraph['date']]
     lineGraph = lineGraph.to_dict(orient='records')
@@ -573,11 +573,12 @@ def analysis_view(request, section):
             if key not in keys_to_keep:
                 item.pop(key)
 
-    ##상자수염그래프
+    #-----상자수염그래프-----
     box_rainy_date = conut_df[conut_df['is_rainy'] == True]['total_lost'].tolist()
     box_sunny_date = conut_df[conut_df['is_rainy'] == False]['total_lost'].tolist()
 
-    ##회귀 그래프 값 전달
+
+    #-----회귀 그래프 값 전달-----
     cols = ['subway_boardings', 'subway_alightings', 'bus_boardings', 'bus_alightings']
 
     # 네 개 중 하나라도 0이면 제외
@@ -595,6 +596,13 @@ def analysis_view(request, section):
     regression_data = filtered_df[['date', 'total_people', 'total_lost', 'is_rainy']] \
                         .to_dict(orient='records')
 
+    #-----덤벨 차트-----
+    dumbbell_rainy = (rainy_category_counts / rainy_days).to_dict()
+    dumbbell_sunny = (sunny_category_counts / sunny_days).to_dict()
+    print(dumbbell_rainy)
+    print(dumbbell_sunny)
+
+    #-----전달-----
     context ={
         'reports': reports,
         'rain_list': rain_list,
@@ -623,7 +631,10 @@ def analysis_view(request, section):
         'box_rainy_date': box_rainy_date,
         'box_sunny_date': box_sunny_date,
 
-        'regression_data': regression_data
+        'regression_data': regression_data,
+
+        'dumbbell_rainy': dumbbell_rainy,
+        'dumbbell_sunny': dumbbell_sunny
     }
 
     if section == 'table':
@@ -636,4 +647,7 @@ def analysis_view(request, section):
         context['show_visualization'] = True
     elif section == 'boxPlot':
         context['show_boxPlot'] = True
+    elif section == 'dumbbellPlot':
+        context['show_dumbbellPlot'] = True
+
     return render(request, 'main/analysis.html', context)
