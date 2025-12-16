@@ -18,6 +18,4 @@ urlpatterns = [
     #추가 분석 페이지
     path('analysis/table/', views.analysis_view, {'section': 'table'}, name='analysis_table'),
     path('analysis/regression/', views.analysis_view, {'section': 'regression'}, name='analysis_regression'),
-    path('analysis/stats/', views.analysis_view, {'section': 'stats'}, name='analysis_stats'),
-    path('analysis/visualization/', views.analysis_view, {'section': 'visualization'}, name='analysis_visualization'),
 ]
