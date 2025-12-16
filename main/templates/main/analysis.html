@@ -136,12 +136,204 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    {% if show_table or show_regression or show_stats or show_boxPlot %}
+    {% if show_table or show_regression or show_stats or show_boxPlot or show_dumbbellPlot %}
     <h2>📊 분실물 & 날씨 분석</h2>
     <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/stats/'">꺾은선그래프</button>
     <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/boxPlot/'">상자 수염 그래프</button>
     <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/regression/'">회귀 그래프</button>
+    <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/dumbbell/'">덤벨 차트</button>
     <hr>
+    {% endif %}
+
+    {% if show_dumbbellPlot %}
+    <div id="dumbbell-section">
+        <h1>덤벨 차트</h1>
+        <svg id="dumbbellChart" width="1000" height="400"></svg>
+        <div id="tooltip3" class="tooltip"></div>
+
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script>
+            const rainyData = {{ dumbbell_rainy|safe }};
+            const sunnyData = {{ dumbbell_sunny|safe }};
+
+            const data = Object.keys(rainyData)
+                .filter(k => k in sunnyData)
+            .map(category => ({
+                    category,
+                    rainy: rainyData[category],
+                    sunny: sunnyData[category]
+            }));
+
+
+            const margin = { top: 20, right: 40, bottom: 40, left: 80 };
+            const width = 700 - margin.left - margin.right;
+            const height = 320 - margin.top - margin.bottom;
+
+            const svg = d3.select("#dumbbellChart")
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const maxValue = d3.max(data, d => Math.max(d.sunny, d.rainy));
+
+            const x = d3.scaleLinear()
+                .domain([0, 0.5, 0.501,  maxValue])
+                .range([0, width * 0.4, width * 0.4 + 30, width]);
+
+
+            const y = d3.scaleBand()
+            .domain(data.map(d => d.category))
+            .range([0, height])
+            .padding(0.6);
+
+            // 축
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(
+                    d3.axisBottom(x)
+                    .tickValues([0, 0.1, 0.2, 0.3, 0.4, 0.5, 1, 5, 10, 15, 20, 25, 30])
+                    .tickFormat(d3.format("~g"))
+                );
+
+            svg.append("g")
+            .call(d3.axisLeft(y));
+
+            //축 브레이크
+            const breakValue = 0.5;
+            const breakX = x(breakValue) + 17;
+
+            const breakGroup = svg.append("g")
+            .attr("class", "axis-break")
+            .attr("transform", `translate(${breakX}, ${height})`);
+
+            breakGroup.append("line")
+            .attr("x1", -6)
+            .attr("y1", 6)
+            .attr("x2", 0)
+            .attr("y2", -6)
+            .attr("stroke", "#666")
+            .attr("stroke-width", 1.5);
+
+            breakGroup.append("line")
+            .attr("x1", 0)
+            .attr("y1", 6)
+            .attr("x2", 6)
+            .attr("y2", -6)
+            .attr("stroke", "#666")
+            .attr("stroke-width", 1.5);
+
+            
+            const tooltip3 = d3.select("#tooltip3");
+
+            // 연결선
+            svg.selectAll(".link")
+                .data(data)
+                .enter()
+                .append("line")
+                .attr("class", "link")
+                .attr("x1", d => x(d.sunny))
+                .attr("x2", d => x(d.rainy))
+                .attr("y1", d => y(d.category) + y.bandwidth() / 2)
+                .attr("y2", d => y(d.category) + y.bandwidth() / 2)
+                .attr("stroke", "#bbb")
+                .attr("stroke-width", 2);
+
+            svg.selectAll(".link-hit")
+                .data(data)
+                .enter()
+                .append("line")
+                .attr("class", "link-hit")
+                .attr("x1", d => x(d.sunny))
+                .attr("x2", d => x(d.rainy))
+                .attr("y1", d => y(d.category) + y.bandwidth() / 2)
+                .attr("y2", d => y(d.category) + y.bandwidth() / 2)
+                .attr("stroke", "transparent")
+                .attr("stroke-width", 12)   // ← hover 잘 잡히게
+                .style("cursor", "pointer")
+                .on("mouseenter", (event, d) => {
+                    tooltip3
+                        .style("opacity", 1)
+                        .html(`
+                            <strong>${d.category}</strong><br/>
+                            ☀️ 맑은 날 평균: ${d.sunny}<br/>
+                            🌧 비오는 날 평균: ${d.rainy}<br/>
+                            차이: ${Math.abs(d.sunny - d.rainy).toFixed(2)}
+                        `);
+                })
+                .on("mousemove", (event) => {
+                    tooltip3
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseleave", () => {
+                    tooltip3.style("opacity", 0);
+                });
+
+            
+            
+            // 맑은 날
+            svg.selectAll(".sunny")
+                .data(data)
+                .enter()
+                .append("circle")
+                .attr("class", "sunny")
+                .attr("cx", d => x(d.sunny))
+                .attr("cy", d => y(d.category) + y.bandwidth() / 2)
+                .attr("r", 6)
+                .attr("fill", "#f4c430")
+                
+            svg.selectAll(".sunny")
+                .on("mouseenter", (event, d) => {
+                    tooltip3
+                    .style("opacity", 1)
+                    .html(`
+                        <strong>${d.category}</strong><br/>
+                        ☀️ 맑은 날 평균: ${d.sunny}<br/>
+                        🌧 비오는 날 평균: ${d.rainy}<br/>
+                        차이: ${Math.abs(d.sunny - d.rainy).toFixed(2)}
+                    `);
+                })
+                .on("mousemove", (event) => {
+                    tooltip3
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseleave", () => {
+                    tooltip3.style("opacity", 0);
+                });
+
+            // 비 오는 날
+            svg.selectAll(".rainy")
+                .data(data)
+                .enter()
+                .append("circle")
+                .attr("class", "rainy")
+                .attr("cx", d => x(d.rainy))
+                .attr("cy", d => y(d.category) + y.bandwidth() / 2)
+                .attr("r", 6)
+                .attr("fill", "#4a90e2")
+            
+                svg.selectAll(".rainy")
+                .on("mouseenter ", (event, d) => {
+                    tooltip3
+                        .style("opacity", 1)
+                        .html(`
+                            <strong>${d.category}</strong><br/>
+                            ☀️ 맑은 날 평균: ${d.sunny}<br/>
+                            🌧 비오는 날 평균: ${d.rainy}<br/>
+                            차이: ${Math.abs(d.sunny - d.rainy).toFixed(2)}
+                        `);
+                })
+                .on("mousemove", (event) => {
+                    tooltip3
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })  
+                .on("mouseleave", () => {
+                    tooltip3.style("opacity", 0);
+                });
+
+        </script>
+    </div>
     {% endif %}
 
     {% if show_table %}
