@@ -27,9 +27,10 @@ from .models import LostItem, RidershipDaily, RainImpactReport, WeatherDaily
 from .forms import LostItemSearchForm, LostItemForm, LostItemCsvUploadForm 
 
 import csv
-from i
-o import TextIOWrapper 
+from io import TextIOWrapper 
 
+def home(request):
+    return render(request, 'main/home.html')
 # ----------------------------------------------------------------------
 # Helper Functions (도우미 함수) - (유지)
 # ----------------------------------------------------------------------

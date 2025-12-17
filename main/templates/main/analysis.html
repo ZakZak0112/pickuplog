@@ -5,53 +5,174 @@
     <title>분실물 분석 (D3.js 시각화)</title>
 
     <style>
-        body { font-family: "Malgun Gothic", sans-serif; margin: 20px; background: #f9f9f9; }
+        body { font-family: "Pretendard", "Malgun Gothic", sans-serif; margin: 20px; background: #f4f7fc; color: #333; }
         h1, h2, h3 { text-align: center; color: #333; }
-        /* 버튼 스타일은 분석 페이지 이동을 위해 유지 */
+        
+        /* 공통 버튼 스타일 */
         .button {
-            padding: 10px 20px;        
-            border-radius: 25px / 50%; 
+            padding: 10px 24px;
+            border-radius: 50px;
             border: none;
             cursor: pointer;
-            color: black;
+            color: white;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 15px;
             margin: 5px;
-            transition: background 0.3s, opacity 0.3s;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background-color: #4a76ff;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .button.secondary {
+            background-color: #a0a0a0;
+        }
+        
+        /* 상단 네비게이션 영역 */
+        .nav-buttons {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        /* 시각화 섹션 컨테이너 */
+        #visualization-section {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* 날씨 토글 영역 */
+        #toggle-weather {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        /* 통계 박스 (오늘 탑승 인원 등) */
+        #stats-line {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .stats-box {
+            background: white;
+            padding: 15px 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            text-align: center;
+            min-width: 150px;
+        }
+        .stats-box p:first-child { font-size: 0.9em; color: #666; margin: 0 0 5px 0; }
+        .stats-box p:last-child { font-size: 1.4em; font-weight: bold; margin: 0; color: #4a76ff; }
+
+        /* ---------- [개선된 스토리텔링 섹션 스타일] ---------- */
+        #actDiv {
+            background-color: white;
+            border-radius: 20px;
+            padding: 40px;
+            margin-top: 40px;
+            margin-bottom: 60px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1); /* 부드러운 그림자 */
+            text-align: center;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            transition: all 0.3s ease;
+            border: 1px solid #eef2f6;
+        }
+
+        #act {
+            font-size: 14px;
+            font-weight: bold;
+            color: #4a76ff;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            display: inline-block;
+            background: #eef4ff;
+            padding: 5px 12px;
+            border-radius: 20px;
+        }
+
+        #context-title {
+            font-size: 28px;
+            margin-bottom: 25px;
+            color: #222;
+            font-weight: 800;
+            line-height: 1.3;
+        }
+
+        .story-content {
+            font-size: 18px;
+            line-height: 1.7;
+            color: #555;
+            margin-bottom: 30px;
+            word-break: keep-all; /* 한글 단어 끊김 방지 */
+        }
+
+        .highlight-text {
+            background: linear-gradient(to top, #c9dff2 40%, transparent 40%);
+            font-weight: bold;
+            color: #111;
+        }
+
+        /* 그래프 영역 */
+        #context-3 {
+            width: 100%;
+            max-width: 650px;
+            margin: 20px auto;
+            min-height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 하단 버튼 그룹 */
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
         }
 
         #before-btn {
-            background-color: #4a76ff;
-            opacity: 0.6; /* 흐리게 */
+            background-color: #e0e0e0;
+            color: #555;
         }
-
         #before-btn:hover {
-            opacity: 0.8; /* 호버 시 조금 더 진하게 */
+            background-color: #d0d0d0;
         }
 
-        #next-btn {
-            background-color: #4a76ff; /* 파란색 */
-        }
-
-        #next-btn:hover {
-            background-color: #3a5dcc; /* 살짝 진하게 */
-        }
+        /* 테이블 등 기타 요소 스타일 */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .highlight { font-weight: bold; color: #d32f2f; }
+        .tooltip { position: absolute; background: white; border: 1px solid #333; padding: 5px; opacity: 0; pointer-events: none; border-radius: 4px; }
     </style>
 </head>
 <body>
     {% if show_table or show_regression or show_stats or show_boxPlot %}
-    <h2>📊 분실물 & 날씨 분석</h2>
-    <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/stats/'">꺾은선그래프</button>
-    <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/boxPlot/'">상자 수염 그래프</button>
-    <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/regression/'">회귀 그래프</button>
-    <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/dumbbell/'">덤벨 차트</button>
+    <div class="nav-buttons">
+        <h2>📊 분실물 & 날씨 분석</h2>
+        <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/stats/'">꺾은선그래프</button>
+        <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/boxPlot/'">상자 수염 그래프</button>
+        <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/regression/'">회귀 그래프</button>
+        <button class="button" onclick="window.location.href='http://127.0.0.1:8000/analysis/dumbbell/'">덤벨 차트</button>
+    </div>
     <hr>
     {% endif %}
 
     {% if show_table %}
     <div id="table-section">
- 
         <h3>📅 날짜별 분석 테이블</h3>
         <table>
             <thead>
@@ -61,7 +182,6 @@
                     <th>강수 여부</th>
                     <th>평균 기온</th>
                     <th>총 분실물</th>
-
                     {% for key, value in reports.0.items %}
                         {% if key not in 'date,avg_temp,rain_mm,is_rainy,total_lost' %}
                             <th>{{ key }}</th>
@@ -77,7 +197,6 @@
                     <td>{{ row.is_rainy }}</td>
                     <td>{{ row.avg_temp }}</td>
                     <td>{{ row.total_lost }}</td>
-
                     {% for key, value in row.items %}
                         {% if key not in 'date,avg_temp,rain_mm,is_rainy,total_lost' %}
                             <td {% if value != 0 %} class="highlight" {% endif %}>{{ value }}</td>
@@ -91,279 +210,171 @@
     {% endif %}
 
     {% if show_regression %}
-    <h1>회귀 그래프</h1>
-
-    <svg id="regressionChart" width="600" height="400"></svg>
-    <div class="tooltip"></div>
-
-    <button id="xRange1">전체 범위</button>
-    <button id="xRange2">제한된 범위</button>
-
-    <p>
-        전체 범위에서는 회귀선이 거의 수평에 가까워 유의미한 데이터를 얻을 수 없다. 그래서 데이터를 한정하여 범위를 좁혔다. (버튼을 눌러 확인할 수 있습니다) <br>
-        제한된 범위에서 보았을 때, 회귀선이 우상향하므로 인원수와 분실물 수 간에는 양의 상관관계가 있다.
-    </p>
+    <div style="text-align: center;">
+        <h1>회귀 그래프</h1>
+        <svg id="regressionChart" width="600" height="400" style="background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);"></svg>
+        <div class="tooltip"></div>
+        <div style="margin-top: 20px;">
+            <button id="xRange1" class="button">전체 범위</button>
+            <button id="xRange2" class="button">제한된 범위</button>
+        </div>
+        <div style="max-width: 600px; margin: 20px auto; line-height: 1.6; text-align: left; background: #fff; padding: 20px; border-radius: 10px;">
+            <p>• <b>전체 범위</b>: 이상치가 포함되어 있어 회귀선의 경향성이 뚜렷하지 않을 수 있습니다.</p>
+            <p>• <b>제한된 범위</b>: 데이터를 한정하여 보면 회귀선이 우상향하므로, <span style="color:#d32f2f; font-weight:bold;">인원수와 분실물 수 간에는 양의 상관관계</span>가 있음이 더 명확해집니다.</p>
+        </div>
+    </div>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     {{ regression_data|json_script:"data" }}
     <script>
-    const data = JSON.parse(document.getElementById('data').textContent);
-    const svg = d3.select("#regressionChart");
+        const data = JSON.parse(document.getElementById('data').textContent);
+        const svg = d3.select("#regressionChart");
+        const width = +svg.attr("width") - 50;
+        const height = +svg.attr("height") - 50;
+        const tooltip = d3.select(".tooltip");
 
-            const width = +svg.attr("width") - 50;
-            const height = +svg.attr("height") - 50;
+        // 초기 범위 설정 (전체 데이터 기준)
+        let minX = d3.min(data, d => d.total_people);
+        let maxX = d3.max(data, d => d.total_people);
+        
+        // 그래프 그리기 함수
+        function drawChart(currentMinX, currentMaxX) {
+            svg.selectAll("*").remove(); // 기존 그림 지우기
 
-            const tooltip = d3.select(".tooltip");
+            // 축 범위 재설정
+            const x = d3.scaleLinear().domain([currentMinX, currentMaxX]).range([50, width]);
+            const y = d3.scaleLinear().domain([0, d3.max(data, d => d.total_lost) * 1.1]).range([height, 50]);
+            
+            // 데이터 필터링
+            const filteredPoints = data.filter(d => d.total_people >= currentMinX && d.total_people <= currentMaxX);
 
-            // x, y 스케일
-            const x = d3.scaleLinear()
-                .domain([minX, maxX])
-                .range([50, width]);
-
-            const y = d3.scaleLinear()
-                .domain([0, d3.max(data, d => d.total_lost) * 1.1])
-                .range([height, 50]);
-
-            // 점 색
-            const color = d => d.is_rainy ? "steelblue" : "orange";
-
-            const filteredPoints = data.filter(d => d.total_people >= minX);
             // 점 그리기
             svg.selectAll("circle")
                 .data(filteredPoints)
-                .enter()
-                .append("circle")
+                .enter().append("circle")
                 .attr("cx", d => x(d.total_people))
                 .attr("cy", d => y(d.total_lost))
                 .attr("r", 5)
-                .attr("fill", color)
+                .attr("fill", d => d.is_rainy ? "steelblue" : "orange")
                 .attr("opacity", 0.7)
                 .on("mouseover", function(event, d) {
-                    tooltip
-                        .style("opacity", 1)
-                        .html(`
-                            <b>${d.is_rainy ? "비 오는 날" : "맑은 날"}</b><br>
-                            총 이용객: ${d.total_people}<br>
-                            분실량: ${d.total_lost}<br>
-                            날짜: ${d.date}
-                        `);
-                })
-                .on("mousemove", function(event) {
-                    tooltip
+                    tooltip.style("opacity", 1)
+                        .html(`<b>${d.is_rainy ? "비 오는 날" : "맑은 날"}</b><br>총 이용객: ${d.total_people.toLocaleString()}명<br>분실량: ${d.total_lost}개<br>날짜: ${d.date}`)
                         .style("left", (event.pageX + 10) + "px")
                         .style("top", (event.pageY - 20) + "px");
                 })
-                .on("mouseout", function() {
-                    tooltip.style("opacity", 0);
-                });
+                .on("mouseout", function() { tooltip.style("opacity", 0); });
 
-            // 범례
-            const legendData = [
-                { label: "비 오는 날", color: "steelblue" },
-                { label: "맑은 날", color: "orange" }
-            ];
-
-            const legend = svg.append("g")
-                .attr("transform", "translate(50, 20)");
-
-            legend.selectAll("legend-item")
-                .data(legendData)
-                .enter()
-                .append("g")
-                .attr("class", "legend-item")
-                .attr("transform", (d, i) => `translate(0, ${i * 20})`)
-                .each(function(d) {
-                    const g = d3.select(this);
-                    g.append("circle")
-                        .attr("cx", 0)
-                        .attr("cy", 0)
-                        .attr("r", 6)
-                        .attr("fill", d.color);
-                    g.append("text")
-                        .attr("x", 12)
-                        .attr("y", 4)
-                        .attr("font-size", "12px")
-                        .text(d.label);
-                });
-
-            // --- 선형 회귀 계산 ---
-            function linearRegression(data) {
-                const n = data.length;
+            // 회귀선 계산 및 그리기
+            if (filteredPoints.length > 1) {
+                const n = filteredPoints.length;
                 let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-                data.forEach(d => {
-                    sumX += d.total_people;
-                    sumY += d.total_lost;
+                filteredPoints.forEach(d => {
+                    sumX += d.total_people; sumY += d.total_lost;
                     sumXY += d.total_people * d.total_lost;
                     sumXX += d.total_people * d.total_people;
                 });
                 const slope = (n*sumXY - sumX*sumY) / (n*sumXX - sumX*sumX);
                 const intercept = (sumY - slope*sumX)/n;
-                return {slope, intercept};
+                
+                const x1 = currentMinX;
+                const x2 = currentMaxX;
+                const y1 = slope * x1 + intercept;
+                const y2 = slope * x2 + intercept;
+
+                svg.append("line")
+                    .attr("x1", x(x1)).attr("y1", y(y1))
+                    .attr("x2", x(x2)).attr("y2", y(y2))
+                    .attr("stroke", "red").attr("stroke-width", 2);
             }
 
-            const filteredData = data.filter(d => d.total_people >= minX && d.total_people <= maxX);
-            const {slope, intercept} = linearRegression(filteredData);
-
-            // 회귀선용 좌표
-            const xVals = [minX, maxX];
-            const yVals = xVals.map(x => slope*x + intercept);
-
-            const line = d3.line()
-                .x(d => x(d[0]))
-                .y(d => y(d[1]));
-
-            svg.append("path")
-                .datum(d3.zip(xVals, yVals))
-                .attr("fill", "none")
-                .attr("stroke", "red")
-                .attr("stroke-width", 2)
-                .attr("d", line);
-
             // 축 그리기
-            svg.append("g")
-                .attr("transform", `translate(0, ${height})`)
-                .call(d3.axisBottom(x).ticks(10, "~s")); 
+            svg.append("g").attr("transform", `translate(0, ${height})`).call(d3.axisBottom(x).ticks(5, "~s"));
+            svg.append("g").attr("transform", `translate(50, 0)`).call(d3.axisLeft(y));
+            
+            // 축 라벨
+            svg.append("text").attr("x", (width+50)/2).attr("y", height+40).text("승하차 인원").attr("font-size", "12px").attr("text-anchor", "middle");
+            svg.append("text").attr("transform", "rotate(-90)").attr("y", 15).attr("x", -(height+50)/2).text("분실물 수").attr("font-size", "12px").attr("text-anchor", "middle");
 
-            svg.append("text")
-                .attr("x", (width + 50) / 2)
-                .attr("y", height + 40)
-                .attr("text-anchor", "middle")
-                .attr("font-size", "14px")
-                .text("승하차 인원");
-
-            svg.append("g")
-                .attr("transform", `translate(50, 0)`)
-                .call(d3.axisLeft(y));
-
-            svg.append("text")
-                .attr("text-anchor", "middle")
-                .attr("transform", `translate(15, ${(height + 50) / 2}) rotate(-90)`)
-                .attr("font-size", "14px")
-                .text("분실물 수");
+            // 범례
+            const legend = svg.append("g").attr("transform", "translate(70, 20)");
+            legend.append("circle").attr("cx",0).attr("cy",0).attr("r", 5).attr("fill", "steelblue");
+            legend.append("text").attr("x", 10).attr("y", 4).text("비 오는 날").attr("font-size", "12px");
+            legend.append("circle").attr("cx",0).attr("cy",20).attr("r", 5).attr("fill", "orange");
+            legend.append("text").attr("x", 10).attr("y", 24).text("맑은 날").attr("font-size", "12px");
         }
-    
+
+        // 초기 실행
+        drawChart(minX, maxX);
+
+        // 버튼 이벤트 리스너
+        document.getElementById("xRange1").addEventListener("click", () => {
+            // 전체 범위
+            drawChart(d3.min(data, d => d.total_people), d3.max(data, d => d.total_people));
+        });
+
+        document.getElementById("xRange2").addEventListener("click", () => {
+            // 제한된 범위 (예: 하위 10% 제거하여 경향성 보기)
+            const sorted = data.map(d => d.total_people).sort(d3.ascending);
+            const cutoff = d3.quantile(sorted, 0.1); // 하위 10% 지점
+            drawChart(cutoff, d3.max(data, d => d.total_people));
+        });
     </script>
-
-
     {% endif %}
 
     {% if show_stats %}
     <h1>꺾은선그래프</h1>
-    <svg id="lineChart" width="600" height="400"></svg>
-
+    <svg id="lineChart" width="600" height="400" style="display:block; margin: 0 auto; background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);"></svg>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
         const parseDate = d3.timeParse("%Y-%m-%d");
-
         const data1 = {{lineGraph|safe}};
-
         const data2 = {{lineGraph_weather|safe}};
-
-    const svg = d3.select("#lineChart");
-    const width = +svg.attr("width") - 50;   // 여백 고려
-    const height = +svg.attr("height") - 50;
-
-    [data1, data2].forEach(arr => {
-        arr.forEach(d => d.date = parseDate(d.date));
-    });
-
-    const allData = data1.concat(data2);
-
-    //스케일
-    const x = d3.scaleTime()
-        .domain(d3.extent(allData, d => d.date))
-        .range([50, width]);
-
-        const y = d3.scaleLinear()
-                    .domain([0, d3.max(allData, d => d.value)])
-                    .range([height, 50]);
-                    
-        const line = d3.line()
-               .x(d => x(d.date))
-               .y(d => y(d.value));
-
-        // 그래프 그리기
-        svg.append("path")
-            .datum(data1)
-            .attr("fill", "none")
-            .attr("stroke", "steelblue")
-            .attr("stroke-width", 2)
-            .attr("d", line);
-
-        svg.append("path")
-            .datum(data2)
-            .attr("fill", "none")
-            .attr("stroke", "orange")
-            .attr("stroke-width", 2)
-            .attr("d", line);
-
-        svg.append("g")
-            .attr("transform", `translate(0, ${height})`)
-            .call(d3.axisBottom(x).ticks(5).tickFormat(d3.timeFormat("%m-%d")));
-
-        svg.append("g")
-            .attr("transform", `translate(50, 0)`)
-            .call(d3.axisLeft(y));
-
-    //라벨 붙이기
-    const legend = svg.append("g")
-                .attr("transform", `translate(${width - 120}, 20)`); // 위치 조정
-
-    const lines = [
-        {color: "steelblue", label: "총 분실물"},
-        {color: "orange", label: "강수량"}
-    ];
-
-    lines.forEach((lineObj, i) => {
-        const g = legend.append("g")
-                        .attr("transform", `translate(0, ${i*20})`);
-
-        // 색상 박스
-        g.append("rect")
-        .attr("width", 10)
-        .attr("height", 10)
-        .attr("fill", lineObj.color);
-
-            // 텍스트
-            g.append("text")
-            .attr("x", 15)
-            .attr("y", 10)
-            .text(lineObj.label)
-            .attr("font-size", "12px")
-            .attr("alignment-baseline", "middle");
-        });
-
+        const svg = d3.select("#lineChart");
+        const width = +svg.attr("width") - 50;
+        const height = +svg.attr("height") - 50;
+        [data1, data2].forEach(arr => { arr.forEach(d => d.date = parseDate(d.date)); });
+        const allData = data1.concat(data2);
+        const x = d3.scaleTime().domain(d3.extent(allData, d => d.date)).range([50, width]);
+        const y = d3.scaleLinear().domain([0, d3.max(allData, d => d.value)]).range([height, 50]);
+        const line = d3.line().x(d => x(d.date)).y(d => y(d.value));
+        
+        svg.append("path").datum(data1).attr("fill", "none").attr("stroke", "steelblue").attr("stroke-width", 2).attr("d", line);
+        svg.append("path").datum(data2).attr("fill", "none").attr("stroke", "orange").attr("stroke-width", 2).attr("d", line);
+        svg.append("g").attr("transform", `translate(0, ${height})`).call(d3.axisBottom(x).ticks(5).tickFormat(d3.timeFormat("%m-%d")));
+        svg.append("g").attr("transform", `translate(50, 0)`).call(d3.axisLeft(y));
+        
+        // 범례
+        const legend = svg.append("g").attr("transform", `translate(${width - 100}, 20)`);
+        legend.append("rect").attr("width",10).attr("height",10).attr("fill","steelblue");
+        legend.append("text").attr("x", 15).attr("y", 10).text("총 분실물").attr("font-size","12px");
+        legend.append("rect").attr("y", 20).attr("width",10).attr("height",10).attr("fill","orange");
+        legend.append("text").attr("x", 15).attr("y", 30).text("강수량").attr("font-size","12px");
     </script>
     {% endif %}
 
+
     {% if show_visualization %}
-    <!--시각화 섹션-->
     <div id="visualization-section">
 
-        <div id="toggle-weather"> <!--버튼 토글-->
-            <span id="current-date"></span>
-            <button id="toggle-weather-btn">날씨 토글 ☀️➡️🌧️</button>
-            <span></span>
+        <div id="toggle-weather">
+            <span id="current-date" style="font-weight:normal; font-size: 0.8em; color: #777;"></span><br>
+            <button id="toggle-weather-btn" class="button" style="background: #ff9800;">날씨 토글 ☀️➡️🌧️</button>
+            <span id="weather-text"></span>
         </div>
 
-        <div id="subway"> <!--지하철 이미지-->
+        <div id="subway" style="display: flex; justify-content: center;">
             <svg
                 id="scene"
-                width="1200"
-                height="350"
+                width="1000"
+                height="300"
                 viewBox="0 0 1200 350"
                 xmlns="http://www.w3.org/2000/svg"
-                style="border-radius: 45px; box-shadow: 0 10px 25px rgba(0,0,0,0.08)"
+                style="border-radius: 45px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); background: #d8dee6;"
             >
-
-                <!-- 전체 배경 (프레임) -->
                 <rect x="0" y="0" width="1200" height="350" rx="45" fill="#d8dee6" />
-
-                <!-- 창문 영역 -->
                 <rect id="window" x="0" y="0" width="1200" height="260" rx="45" fill="#c9dff2" />
                 <rect x="0" y="0" width="1200" height="260" rx="45" fill="rgba(255,255,255,0.25)" />
-
-                <!-- 각 창문 패널 구분(옅은 기둥) -->
                 <rect x="150" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
                 <rect x="300" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
                 <rect x="450" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
@@ -371,109 +382,83 @@
                 <rect x="750" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
                 <rect x="900" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
                 <rect x="1050" y="0" width="10" height="260" fill="rgba(255,255,255,0.4)" />
-
-                <!-- 상단 손잡이 바 -->
                 <rect x="50" y="70" width="1100" height="10" fill="#8a93a3" opacity="0.7" />
-
-                <!-- 손잡이들 -->
                 <g stroke="#8a93a3" stroke-width="5" opacity="0.7" fill="none">
-                    <line x1="200" x2="200" y1="80" y2="120" />
-                    <circle cx="200" cy="140" r="18" />
-
-                    <line x1="350" x2="350" y1="80" y2="120" />
-                    <circle cx="350" cy="140" r="18" />
-
-                    <line x1="500" x2="500" y1="80" y2="120" />
-                    <circle cx="500" cy="140" r="18" />
-
-                    <line x1="650" x2="650" y1="80" y2="120" />
-                    <circle cx="650" cy="140" r="18" />
-
-                    <line x1="800" x2="800" y1="80" y2="120" />
-                    <circle cx="800" cy="140" r="18" />
-
-                    <line x1="950" x2="950" y1="80" y2="120" />
-                    <circle cx="950" cy="140" r="18" />
+                    <line x1="200" x2="200" y1="80" y2="120" /> <circle cx="200" cy="140" r="18" />
+                    <line x1="350" x2="350" y1="80" y2="120" /> <circle cx="350" cy="140" r="18" />
+                    <line x1="500" x2="500" y1="80" y2="120" /> <circle cx="500" cy="140" r="18" />
+                    <line x1="650" x2="650" y1="80" y2="120" /> <circle cx="650" cy="140" r="18" />
+                    <line x1="800" x2="800" y1="80" y2="120" /> <circle cx="800" cy="140" r="18" />
+                    <line x1="950" x2="950" y1="80" y2="120" /> <circle cx="950" cy="140" r="18" />
                 </g>
-
-                <!-- 바닥 영역 -->
                 <rect x="0" y="260" width="1200" height="90" fill="#c7cdd7" />
-
-                <!--사람 이미지-->
                 <defs>
                     <g id="person" fill="#616b7a">
-                        
-                        <!-- 머리 -->
                         <circle cx="40" cy="25" r="12" />
-
-                        <!-- 반원(어깨 부분) -->
-                        <path d="
-                        M 20 55
-                        Q 40 35 60 55
-                        Z
-                        " />
-
-                        <!-- 몸통 직사각형 -->
+                        <path d="M 20 55 Q 40 35 60 55 Z" />
                         <rect x="20" y="55" width="40" height="45" />
-
                     </g>
-                </defs>
-
-                <defs>
                     <g id="bag">
-                    <!-- 가방 몸통 -->
-                    <rect x="30" y="50" width="140" height="80" rx="10" ry="10" fill="#8B4513" />
-
-                    <!-- 가방 덮개 -->
-                    <rect x="30" y="40" width="140" height="20" rx="5" ry="5" fill="#8B4513" />
-
-                    <!-- 손잡이 -->
-                    <path d="M 60 40 Q 100 10 140 40" stroke="#8B4513" stroke-width="6" fill="none" />
+                        <rect x="30" y="50" width="140" height="80" rx="10" ry="10" fill="#8B4513" />
+                        <rect x="30" y="40" width="140" height="20" rx="5" ry="5" fill="#8B4513" />
+                        <path d="M 60 40 Q 100 10 140 40" stroke="#8B4513" stroke-width="6" fill="none" />
                     </g>
                 </defs>
-                
             </svg>
         </div>
-        <div id="stats-line"> <!-- 값 표시 -->
+
+        <div id="stats-line">
             <div class="stats-box">
                 <p>오늘 탑승 인원</p>
-                <p><span id="num-people"></span>명</p>
+                <p><span id="num-people">0</span>명</p>
             </div>
             <div class="stats-box">
                 <p>분실물 개수</p>
-                <p><span id="num-lostitem"></span>개</p>
+                <p><span id="num-lostitem">0</span>개</p>
             </div>
             <div class="stats-box">
-                <p>강수</p>
-                <p id="num-rain"></p>
+                <p>강수량</p>
+                <p id="num-rain">맑음</p>
             </div>
         </div>
-        <div id="actDiv"> <!-- 가설증명 대화로그 -->
-            <div>
-                <p id="act">ACT.1 가설</p>
+
+        <div id="actDiv">
+            <p id="act">ACT 1. 가설 설정</p>
+
+            <h1 id="context-title">비가 오면 우산을 더 많이 잃어버릴까요?</h1>
+
+            <div class="story-content">
+                <p id="context-1">
+                    비 오는 날은 짐도 많고 바닥도 미끄러워서 정신이 없죠.<br>
+                    그래서 우리는 <span class="highlight-text">"비 오는 날 분실물이 더 많을 것이다"</span>라고 생각합니다.
+                </p>
+                <p id="context-2" style="font-size: 0.9em; color: #888;">
+                    (위의 '날씨 토글' 버튼을 눌러 지하철 풍경을 바꿔보세요!)
+                </p>
             </div>
-            <div>
-                <h1 id="context-title">비가 오면 분실물이 많아질까?</h1>
-                <p id="context-1">비 오는 날은 짐도 많고 바닥도 미끄러워서 정신이 없죠. <br> 보통은 비 오는 날 분실물이 더 많을 거라고 생각합니다.</p>
-                <p id="context-2">(버튼을 눌러 날씨를 바꿔보세요. 분실물 양이 어떻게 변하나요?)</p>
-            </div>
-            <div id="context-3" style="width:400px;"></div>
-            <div>
-                <button id="before-btn" class="button">이전</button>
-                <button id="next-btn" class="button">다음으로</button>
+
+            <div id="context-3"></div>
+
+            <div class="btn-group">
+                <button id="before-btn" class="button secondary">이전 단계</button>
+                <button id="next-btn" class="button">다음 단계</button>
             </div>
         </div>
+
     </div>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
     <script>
+        // --------------- [지하철 애니메이션 로직 유지] ---------------
         let date = "{{recent_sunny}}"
         let parts = date.match(/\d+/g); 
-        let date_formatted = `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+        let date_formatted = parts ? `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}` : "";
         let totalBoardings = {{ total_boardings|safe }};
-        let NUM_PEOPLE_boardings = totalBoardings[date_formatted] / 1000000;
+        let NUM_PEOPLE_boardings = (totalBoardings[date_formatted] || 0) / 1000000;
         let totalAlightings = {{total_alightings|safe}};
-        let NUM_PEOPLE = totalBoardings[date_formatted] + totalAlightings[date_formatted];
+        let NUM_PEOPLE = (totalBoardings[date_formatted] || 0) + (totalAlightings[date_formatted] || 0);
         let lostitems = {{recent_sunny_lostitem}};
 
         document.getElementById('current-date').textContent = date;
@@ -481,66 +466,38 @@
         document.getElementById('num-lostitem').textContent = lostitems.toLocaleString();
         document.getElementById('num-rain').textContent = "맑음";
 
-        const ENTER_SPEED = 15;        // 기본 이동 속도
-        const WAIT_TIME = 1500;       // 내부 대기 시간 (ms)
-
-        const START_X = -100;         // 사람 이미지 시작점
-        const END_X = 1400;           // 나가는 최종 지점
-
-        const ENTER_TARGET_MIN = 250;  // 지하철 내부 좌측
-        const ENTER_TARGET_MAX = 800;  // 지하철 내부 우측
-        
+        const ENTER_SPEED = 15;
+        const WAIT_TIME = 1500;
+        const START_X = -100;
+        const END_X = 1400;
+        const ENTER_TARGET_MIN = 250;
+        const ENTER_TARGET_MAX = 800;
         const scene = document.getElementById("scene");
 
         function createPerson() {
             const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-            use.setAttribute("href", "#person");  // defs 안에 정의한 id
-
-            // 초기 위치 (transform 쓰지 않음!)
+            use.setAttribute("href", "#person");
             use.setAttribute("x", START_X);
-            use.setAttribute("y", 200 + Math.random() * 30); // 약간 다른 세로 위치
-
+            use.setAttribute("y", 200 + Math.random() * 30);
             scene.appendChild(use);
-
-            // 목표 지점도 랜덤
             const targetX = Math.random() * (ENTER_TARGET_MAX - ENTER_TARGET_MIN) + ENTER_TARGET_MIN;
-
-            // 약간씩 다른 시작 지연
             const startDelay = Math.random() * 300;
-
             setTimeout(() => moveIn(use, targetX), startDelay);
         }
         
-        const MIN_X = 0;
-        const MAX_X = 1000;
-        const FIXED_Y = 270; // y 고정
-        const SCALE = 0.3;
+        const MIN_X = 0; const MAX_X = 1000; const FIXED_Y = 270; const SCALE = 0.3;
         
         function dropBag(x) {
             const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-                
             if (x == true) {
                 const bags = scene.querySelectorAll("use[href='#bag']");
                 bags.forEach(bag => bag.remove());
-            }
-            else {
-                //날씨에 따라 떨어지는 분실물 확률 다르게 하기
-                let random;
-                if (date == "{{recent_sunny}}") 
-                {
-                    random = 1;
-                }
-                else 
-                {
-                    random = 0.2;
-                }
-
+            } else {
+                let random = (date == "{{recent_sunny}}") ? 1 : 0.2;
                 if (Math.random() <= random) {
-                    use.setAttribute("href", "#bag");  // defs 안에 정의한 id
-
+                    use.setAttribute("href", "#bag");
                     const randomX = x + Math.random() * 10;
                     use.setAttribute("transform", `translate(${randomX},${FIXED_Y}) scale(${SCALE})`);
-
                     scene.appendChild(use);
                 }
             }
@@ -550,13 +507,12 @@
             function step() {
                 let x = parseFloat(img.getAttribute("x"));
                 if (x < targetX) {
-                    // 사람마다 다르게: 속도 약간 랜덤 구성
                     const speed = ENTER_SPEED + Math.random() * 1.2;
                     img.setAttribute("x", x + speed);
                     requestAnimationFrame(step);
                 } else {
                     setTimeout(() => dropBag(x), WAIT_TIME)
-                    setTimeout(() => moveOut(img), WAIT_TIME); // 도착 → 내부 대기
+                    setTimeout(() => moveOut(img), WAIT_TIME);
                 }
             }
             step();            
@@ -570,193 +526,152 @@
                     img.setAttribute("x", x + speed);
                     requestAnimationFrame(step);
                 } else {
-                    img.remove(); // 화면에서 제거
+                    img.remove();
                 }
             }
             step();        
-
         }
 
-        // N명 생성
-        for (let i = 0; i < NUM_PEOPLE_boardings; i++) {
-            createPerson(i);
-        }
+        // 초기 인원 생성
+        for (let i = 0; i < NUM_PEOPLE_boardings; i++) { createPerson(i); }
 
-        //날씨 토글
+        // 날씨 토글 로직
         const toggleBtn = document.getElementById("toggle-weather-btn");
-        let isRainy = false; // false → 맑음, true → 비
+        let isRainy = false; 
 
         toggleBtn.addEventListener("click", () => {
-            // 배경, 창문 요소 가져오기
             const windowRects = scene.querySelectorAll("#window");
             
             if (isRainy) {
-                // 맑은 날로 변경
+                // -> 맑음으로 변경
                 windowRects.forEach(rect => {
-                    if (rect.getAttribute("fill").includes("rgba")) {
-                        rect.setAttribute("fill", "rgba(255,255,255,0.25)");
-                    } 
-                    else {
-                        rect.setAttribute("fill", "#c9dff2");
-                    }
+                    if (rect.getAttribute("fill").includes("rgba")) { rect.setAttribute("fill", "rgba(255,255,255,0.25)"); } 
+                    else { rect.setAttribute("fill", "#c9dff2"); }
                 });
-
-                //화창한 날로 바꾸기
                 date = "{{recent_sunny}}";
                 parts = date.match(/\d+/g);
-                date_formatted = `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
-                totalBoardings = {{ total_boardings|safe }};
-                NUM_PEOPLE_boardings = totalBoardings[date_formatted] / 1000000;
-                totalAlightings = {{total_alightings|safe}};
-                NUM_PEOPLE = totalBoardings[date_formatted] + totalAlightings[date_formatted];
+                date_formatted = parts ? `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}` : "";
+                NUM_PEOPLE_boardings = (totalBoardings[date_formatted]||0) / 1000000;
+                NUM_PEOPLE = (totalBoardings[date_formatted]||0) + (totalAlightings[date_formatted]||0);
                 document.getElementById('num-people').textContent = NUM_PEOPLE.toLocaleString();
-
                 lostitems = {{recent_sunny_lostitem}}; 
                 document.getElementById('num-lostitem').textContent = lostitems.toLocaleString();
+                toggleBtn.textContent = "날씨 토글 ☀️➡️🌧️";
+                toggleBtn.style.backgroundColor = "#ff9800";
+                document.getElementById('num-rain').textContent = "맑음";
                 
-                toggleBtn.textContent = "날씨 토글 ☀️➡️🌧️"
-                document.getElementById('num-rain').textContent = "맑음"
-
-                //이전 요소 지우기
-                dropBag(true);
-                const people = scene.querySelectorAll("use[href='#person']");
-                people.forEach(people => people.remove());
-
-                //사람 생성
-                for (let i = 0; i < NUM_PEOPLE_boardings; i++) { 
-                    createPerson(i);
-                }
-            } 
-            else {
-                // 비 오는 날로 변경 (어두운 창문)
+            } else {
+                // -> 비로 변경
                 windowRects.forEach(rect => {
-                    if (rect.getAttribute("fill").includes("rgba")) {
-                        rect.setAttribute("fill", "rgba(100,100,150,0.3)");
-                    } 
-                    else {
-                        rect.setAttribute("fill", "#7a8ebc");
-                    }
+                    if (rect.getAttribute("fill").includes("rgba")) { rect.setAttribute("fill", "rgba(100,100,150,0.3)"); } 
+                    else { rect.setAttribute("fill", "#7a8ebc"); }
                 });
-
-                //비 오는 날로 바꾸기
                 date = "{{recent_rainy}}";
                 parts = date.match(/\d+/g);
-                date_formatted = `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
-                totalBoardings = {{ total_boardings|safe }};
-                NUM_PEOPLE_boardings = totalBoardings[date_formatted] / 1000000;
-                totalAlightings = {{total_alightings|safe}};
-                NUM_PEOPLE = totalBoardings[date_formatted] + totalAlightings[date_formatted];
+                date_formatted = parts ? `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}` : "";
+                NUM_PEOPLE_boardings = (totalBoardings[date_formatted]||0) / 1000000;
+                NUM_PEOPLE = (totalBoardings[date_formatted]||0) + (totalAlightings[date_formatted]||0);
                 document.getElementById('num-people').textContent = NUM_PEOPLE.toLocaleString();
-
                 lostitems = {{recent_rainy_lostitem}};
                 document.getElementById('num-lostitem').textContent = lostitems.toLocaleString();
-                
-                toggleBtn.textContent = "날씨 토글 🌧️➡️☀️"
-                document.getElementById('num-rain').textContent = {{recent_rain_mm}} + "mm"
-
-                //이전 요소 지우기
-                dropBag(true);
-                const people = scene.querySelectorAll("use[href='#person']");
-                people.forEach(people => people.remove());
-
-                //사람 생성
-                for (let i = 0; i < NUM_PEOPLE_boardings; i++) {
-                    createPerson(i);
-                }
+                toggleBtn.textContent = "날씨 토글 🌧️➡️☀️";
+                toggleBtn.style.backgroundColor = "#5c6bc0";
+                document.getElementById('num-rain').textContent = "{{recent_rain_mm}}mm";
             }
+            
+            // 애니메이션 리셋
+            dropBag(true);
+            const people = scene.querySelectorAll("use[href='#person']");
+            people.forEach(people => people.remove());
+            for (let i = 0; i < NUM_PEOPLE_boardings; i++) { createPerson(i); }
 
-            isRainy = !isRainy; // 상태 토글
+            isRainy = !isRainy;
             document.getElementById('current-date').textContent = date;
         });
-    </script>
 
-    <script src="https://cdn.plot.ly/plotly-3.3.0.min.js"></script>
 
-    <script>
-        //가설증명 대화
+        // --------------- [개선된 스토리텔링 로직] ---------------
         const beforeBtn = document.getElementById("before-btn");
         const nextBtn = document.getElementById("next-btn");
-        let page = 0;
-
-        beforeBtn.addEventListener("click", () => { 
-            if (page > 0) {
-                page -= 1; 
-                pageChange();
-            }
-        })
-        nextBtn.addEventListener("click", () => { 
-            if (page < 4) {
-                page += 1; 
-                pageChange();
-            }
-
-            //상세 페이지 이동 버튼
-            if (page == 3) {
-                nextBtn.innerHTML = "상세 페이지로"
-                nextBtn.onclick = function() { window.location.href = "analysis/stats/";};
-            }
-            else {
-                nextBtn.innerHTML = "다음으로"
-                nextBtn.onclick = null
-            }
-        })
-
         const act = document.getElementById("act");
         const context_title = document.getElementById("context-title");
         const context_1 = document.getElementById("context-1");
         const context_2 = document.getElementById('context-2');
         const context_3 = document.getElementById('context-3');
+        
+        let page = 0;
+
+        beforeBtn.addEventListener("click", () => { 
+            if (page > 0) { page -= 1; pageChange(); }
+        });
+
+        nextBtn.addEventListener("click", () => { 
+            if (page < 4) { page += 1; pageChange(); }
+            
+            if (page == 3) {
+                nextBtn.innerHTML = "상세 페이지로 >";
+                nextBtn.onclick = function() { window.location.href = "analysis/stats/";};
+            } else {
+                nextBtn.innerHTML = "다음 단계";
+                nextBtn.onclick = function() { 
+                    if (page < 4) { page += 1; pageChange(); }
+                }
+            }
+        });
+
         function pageChange() {
+            // Plotly 그래프 공통 스타일
+            const commonLayout = {
+                barmode: 'stack',
+                margin: { l: 40, r: 20, t: 30, b: 40 },
+                paper_bgcolor: "rgba(0,0,0,0)",
+                plot_bgcolor: "rgba(0,0,0,0)",
+                font: { family: 'Pretendard, Malgun Gothic' },
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.2 }
+            };
+
             if (page == 0) {
-                act.innerHTML = "ACT 1. 가설"
-                context_title.innerHTML = "비가 오면 우산 때문에 더 많이 잃어버릴까?"
-                context_1.innerHTML = "비 오는 날은 짐도 많고 바닥도 미끄러워서 정신이 없죠. <br> 보통은 비 오는 날 분실물이 더 많을 거라고 생각합니다."
-                context_2.innerHTML = "(버튼을 눌러 날씨를 바꿔보세요. 분실물 양이 어떻게 변하나요?)"
-                
+                act.innerHTML = "ACT 1. 가설 설정";
+                context_title.innerHTML = "비가 오면 분실물이 폭증할까?";
+                context_1.innerHTML = `비 오는 날은 우산도 챙겨야 하고, 바닥도 미끄러워 정신이 없죠.<br>상식적으로 생각하면 <span class='highlight-text'>비 오는 날 분실물이 훨씬 많아야 합니다.</span><br>과연 실제 데이터도 그럴까요?`;
+                context_2.innerHTML = "(위의 '날씨 토글' 버튼을 눌러 시뮬레이션을 해보세요.)";
                 context_3.style.height = '1px';
-                Plotly.purge('context-3')
+                Plotly.purge('context-3');
             }
             else if (page == 1) {
-                act.innerHTML = "ACT 2. 데이터의 반전"
-                context_title.innerHTML = "사실은 맑은 날에 더 많이 잃어버립니다!"
-                context_1.innerHTML = "데이터를 분석해보니 맑은 날의 분실물 발생량이 {{lostitem_percent_increse|floatformat:2}}배 더 높았습니다. <br> 우리의 직관과는 정반대의 결과가 나온 것이죠."
-                //23% 변경 필요?
-                context_2.innerHTML = ""
+                act.innerHTML = "ACT 2. 데이터의 반전";
+                context_title.innerHTML = "충격적인 결과: 맑은 날이 더 많다?";
+                context_1.innerHTML = `데이터를 열어보니 우리의 직관과는 정반대의 결과가 나왔습니다.<br>오히려 <span class='highlight-text'>맑은 날의 분실물 발생량이 더 높게</span> 나타났습니다.<br>비가 오면 물건을 더 잘 챙기는 걸까요? 아니면 다른 이유가 있을까요?`;
+                context_2.innerHTML = "";
 
                 const categories = {{ categories|safe }};
                 const rainy = {{ rainy_lostitem_perDay|safe }};
                 const sunny = {{ sunny_lostitem_perDay|safe }};
 
                 let data = [];
-
                 for (let i = 0; i < categories.length; i++) {
                     data.push({
                         name: categories[i],
                         type: 'bar',
                         x: ['비 오는 날', '맑은 날'],
-                        y: [rainy[i], sunny[i]]
+                        y: [rainy[i], sunny[i]],
+                        marker: { opacity: 0.8 }
                     });
                 }
-
-                const layout = {
-                    barmode: 'stack',
-                    margin: { l: 30, r: 10, t: 10, b: 30 }
-                };
-                context_3.style.height = '200px';
-                Plotly.newPlot('context-3', data, layout);
+                context_3.style.height = '300px';
+                Plotly.newPlot('context-3', data, commonLayout);
             }
             else if (page == 2) {
-                act.textContent = "ACT 3. 설명"
-                context_title.innerHTML = "맑은 날에는 사람 수가 더 많다?"
-                context_1.innerHTML = "맑은 날에는 대중교통을 이용하는 사람 수가 더 많기 때문에, <br> 절대적인 분실물 양이 늘어난 것은 아닐까요?"
-                context_2.innerHTML = "밑의 그래프는 사람 수에 영향을 받지 않도록 처리한 그래프입니다."
+                act.innerHTML = "ACT 3. 숨겨진 변수";
+                context_title.innerHTML = "범인은 '사람 수'였습니다.";
+                context_1.innerHTML = `단순히 총량만 비교하면 오류에 빠질 수 있습니다.<br>맑은 날에는 놀러 가는 사람이 많아 <b>지하철 이용객 자체가 많기 때문</b>입니다.<br><span class='highlight-text'>'이용객 1명당 분실률'</span>로 다시 계산해보겠습니다.`;
+                context_2.innerHTML = "이제 두 막대의 높이가 비슷해진 것이 보이시나요?";
                 
                 const categories = {{ categories|safe }};
                 const rainy = {{ rainy_lostitem_perPerson|safe }};
                 const sunny = {{ sunny_lostitem_perPerson|safe }};
-
                 let data = [];
-
                 for (let i = 0; i < categories.length; i++) {
                     data.push({
                         name: categories[i],
@@ -765,78 +680,43 @@
                         y: [rainy[i], sunny[i]]
                     });
                 }
-
-                const layout = {
-                    barmode: 'stack',
-                    margin: { l: 30, r: 10, t: 10, b: 30 }
-                };
-                
-                context_3.style.height = '200px';
-                Plotly.newPlot('context-3', data, layout);
+                context_3.style.height = '300px';
+                Plotly.newPlot('context-3', data, commonLayout);
             }
-            else 
-            {
-                act.textContent = "ACT 4. 확신"
-                context_title.innerHTML = "사람 수 때문이 맞다"
-                context_1.innerHTML = "그러나 그래프를 보면 어째서인지 맑은 날의 분실률이 더 높습니다. <br> 이 차이가 유의미한지 알아보기 위해 z-test를 실행했습니다. <br> z-test 결과를 확인해 보면, 값의 절댓값이 1.96보다 낮으므로 <br> 이 차이는 유의미하지 않습니다. 진짜 사람 수 때문이었던 것입니다."
-                context_2.innerHTML = "z-test 결과: {{z_test}}"
-
+            else {
+                act.innerHTML = "ACT 4. 최종 결론";
+                context_title.innerHTML = "날씨는 죄가 없다";
+                let z_val = {{ z_test|default:0 }};
+                let result_text = Math.abs(z_val) < 1.96 ? "통계적으로 <b>의미 있는 차이가 없다</b>는 것" : "차이가 유의미하다는 것";
+                
+                context_1.innerHTML = `인구수 영향을 제외하고 통계적 검증(Z-test)을 해본 결과,<br>비 오는 날과 맑은 날의 분실률 차이는 ${result_text}이 증명되었습니다.<br><br>결국 <span class='highlight-text'>분실물은 날씨 탓이 아니라, 단지 사람이 많아서 늘어난 것</span>입니다.`;
+                context_2.innerHTML = `<small style='color:#999'>Z-score: ${z_val.toFixed(3)} (절댓값이 1.96 미만이면 차이 없음)</small>`;
                 context_3.style.height = '1px';
-                Plotly.purge('context-3')
+                Plotly.purge('context-3');
             }
         }
-
     </script>
     {% endif %}
 
     {% if show_boxPlot %}
     <h1>상자 수염 그래프 (D3.js)</h1>
-    <svg id="boxPlot" width="600" height="400"></svg>
-    <p>추가: 비가 오는 날은 위로 갈수록 바이올린 차트의 가로폭이 줄어들지만, 맑은 날은 그렇지 않다. 따라서 맑은 날의 분실물 수 빈도가 더 높음을 알 수 있다.</p>
+    <svg id="boxPlot" width="600" height="400" style="display:block; margin: 0 auto; background: white; border-radius:10px; box-shadow:0 4px 10px rgba(0,0,0,0.1);"></svg>
+    <div style="max-width:800px; margin:20px auto; line-height:1.6; text-align:center;">
+        <p><b>추가 분석:</b> 맑은 날(오렌지색)의 상자가 전체적으로 더 높은 위치에 있습니다.</p>
+        <p>이는 맑은 날의 분실물 발생 빈도가 비 오는 날보다 높다는 것을 시각적으로 보여줍니다.</p>
+    </div>
     
-    <p>강수량과 분실량 사이의 상관관계는 없는 것이 증명됐다. 그러나 비가 오는 날과 오지 않는 날의 차이는 있지 않을까?</p>
-    <p>
-        가설 2. 비 오는 날에는 비가 오지 않는 날보다 분실물 양이 많다. <br>
-        증명: 상자 수염 그래프의 상자가 비 오는 날이 비가 오지 않는 날보다 높다. <br>
-        결과: 상자 수염 그래프의 상자는 비 오는 날이 비가 오지 않는 날보다 낮다.
-    </p>
-    <p>
-        정리하자면, 이 그래프는 맑은 날의 분실물 수가 비 오는 날보다 일반적으로 많다는 것을 보여준다. 평균값(상자 가운데의 선)이 맑은 날이 더 높고, 상자 전체적으로도 맑은 날의 값이 더 높다. <br>
-        이어서 생각해보자. 강수량은 원인이 아니다. 그러면 왜 비 오는 날과 맑은 날의 차이가 발생하는 것일까?
-    </p>
-    <p>
-        가설 3. 맑은 날에는 인원수가 비 오는 날보다 많아서 분실물 양이 많아졌다. <br>
-        먼저 이 가설을 증명하려면 맑은 날이 비 오는 날보다 인원수가 많다는 것을 보여주어야 한다. 밑은 비 오는 날과 맑은 날, 그리고 인원수 사이의 상관관계 그래프이다.
-    </p>
-
-    <svg id="barChart" width="600" height="400"></svg>
-    <div class="tooltip"></div>
-
-    <p>그래프를 보면 맑은 날의 평균 인원수가 비 오는 날보다 많다는 것을 알 수 있다. 그러면 이제 인원수와 분실물 양 간의 상관관계를 증명할 차례다.</p>
-
-    <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
-        // Django에서 전달받은 리스트
         const dataRainy = {{ box_rainy_date|safe }};
         const dataNotRainy = {{ box_sunny_date|safe }};
-
         const categories = ['Rainy', 'Not Rainy'];
-        const allData = [dataRainy, dataNotRainy];
+        const allDataBox = [dataRainy, dataNotRainy];
+        const svgBox = d3.select("#boxPlot");
+        const widthBox = +svgBox.attr("width") - 50;
+        const heightBox = +svgBox.attr("height") - 50;
+        const xBox = d3.scaleBand().domain(categories).range([50, widthBox]).padding(0.4);
+        const yBox = d3.scaleLinear().domain([0, d3.max(allDataBox.flat()) * 1.1]).range([heightBox, 50]);
 
-        const svg = d3.select("#boxPlot");
-        const width = +svg.attr("width") - 50;
-        const height = +svg.attr("height") - 50;
-
-        const x = d3.scaleBand()
-            .domain(categories)
-            .range([50, width])
-            .padding(0.4);
-
-        const y = d3.scaleLinear()
-            .domain([0, d3.max(allData.flat()) * 1.1])
-            .range([height, 50]);
-
-        // 상자 수염 계산 함수
         function boxStats(values) {
             values.sort(d3.ascending);
             const q1 = d3.quantile(values, 0.25);
@@ -849,58 +729,22 @@
             return {q1, median, q3, lower, upper, outliers};
         }
 
-        // 상자 수염 그리기
-        allData.forEach((values, i) => {
+        allDataBox.forEach((values, i) => {
             const stats = boxStats(values);
-            const cx = x(categories[i]);
-
+            const cx = xBox(categories[i]);
             // 수염
-            svg.append("line")
-                .attr("x1", cx + x.bandwidth()/2)
-                .attr("x2", cx + x.bandwidth()/2)
-                .attr("y1", y(stats.lower))
-                .attr("y2", y(stats.upper))
-                .attr("stroke", "black");
-
+            svgBox.append("line").attr("x1", cx + xBox.bandwidth()/2).attr("x2", cx + xBox.bandwidth()/2).attr("y1", yBox(stats.lower)).attr("y2", yBox(stats.upper)).attr("stroke", "black");
             // 상자
-            svg.append("rect")
-                .attr("x", cx)
-                .attr("y", y(stats.q3))
-                .attr("width", x.bandwidth())
-                .attr("height", y(stats.q1) - y(stats.q3))
-                .attr("fill", i === 0 ? "steelblue" : "orange")
-                .attr("stroke", "black");
-
+            svgBox.append("rect").attr("x", cx).attr("y", yBox(stats.q3)).attr("width", xBox.bandwidth()).attr("height", yBox(stats.q1) - yBox(stats.q3)).attr("fill", i === 0 ? "steelblue" : "orange").attr("stroke", "black").attr("opacity", 0.6);
             // 중앙값
-            svg.append("line")
-                .attr("x1", cx)
-                .attr("x2", cx + x.bandwidth())
-                .attr("y1", y(stats.median))
-                .attr("y2", y(stats.median))
-                .attr("stroke", "black");
-
+            svgBox.append("line").attr("x1", cx).attr("x2", cx + xBox.bandwidth()).attr("y1", yBox(stats.median)).attr("y2", yBox(stats.median)).attr("stroke", "black").attr("stroke-width", 2);
             // 이상치
-            svg.selectAll(`.outlier-${i}`)
-                .data(stats.outliers)
-                .enter()
-                .append("circle")
-                .attr("cx", cx + x.bandwidth()/2)
-                .attr("cy", d => y(d))
-                .attr("r", 3)
-                .attr("fill", "red");
+            svgBox.selectAll(`.outlier-${i}`).data(stats.outliers).enter().append("circle").attr("cx", cx + xBox.bandwidth()/2).attr("cy", d => yBox(d)).attr("r", 3).attr("fill", "red").attr("opacity", 0.5);
         });
-
-        // x축
-        svg.append("g")
-            .attr("transform", `translate(0, ${height})`)
-            .call(d3.axisBottom(x));
-
-        // y축
-        svg.append("g")
-            .attr("transform", `translate(50, 0)`)
-            .call(d3.axisLeft(y));
+        
+        svgBox.append("g").attr("transform", `translate(0, ${heightBox})`).call(d3.axisBottom(xBox));
+        svgBox.append("g").attr("transform", `translate(50, 0)`).call(d3.axisLeft(yBox));
     </script>
-
     {% endif %}
 
 </body>
