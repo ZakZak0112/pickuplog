@@ -780,19 +780,29 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
         // 툴팁 적용 
-        function addTooltip(svgId) {
+        function addTooltip(svgId, tooltipText) {
             d3.selectAll("#" + svgId + " .topSlice")
-            .on("mouseover", function(event, d) {
-                tooltip.style("opacity", 1)
-                        .html(`${d.data.label}<br>값: ${d.data.value}`)
-                        .style("left", (event.pageX + 10) + "px")
-                        .style("top", (event.pageY - 20) + "px");
-            })
-            .on("mouseout", () => tooltip.style("opacity", 0));
+                .on("mouseover", function(event, d) {
+                    tooltip.style("opacity", 1)
+                            .html(`${d.data.label}<br>${tooltipText}: ${d.data.value}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 20) + "px");
+                })
+                .on("mouseout", () => tooltip.style("opacity", 0));
+
+            d3.selectAll("#"+svgId)
+                .append("text")
+                .attr("x", 175)
+                .attr("y", 330)
+                .attr("text-anchor", "middle")
+                .style("font-size", "14px")
+                .style("fill", "black")
+                .text(`월별 ${tooltipText}`);
         }
 
-        addTooltip("pieLost");
-        addTooltip("pieRain");
+
+        addTooltip("pieLost", "분실물 수");
+        addTooltip("pieRain", "강수량");
 
     </script>
     {% endif %}
