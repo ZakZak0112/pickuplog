@@ -670,7 +670,7 @@
                   .attr("transform", `translate(${width - 120}, 20)`); // 위치 조정
 
         const lines = [
-            {color: "steelblue", label: "총 분실물"},
+            {color: "steelblue", label: "분실물"},
             {color: "orange", label: "강수량"}
         ];
 
@@ -695,7 +695,7 @@
 
         //툴팁 추가
         const tooltip = d3.select(".tooltip");
-
+        
         // 분실물 점
         svg.selectAll(".dot1")
             .data(data1)
@@ -705,7 +705,13 @@
             .attr("cx", d => x(d.date))
             .attr("cy", d => yLeft(d.value))
             .attr("r", 4)
-            .attr("fill", "steelblue");
+            .attr("fill", "steelblue")
+            .on("mouseover", function(event, d) {
+                tooltip.style("opacity", 1)
+                        .html(`분실물 수: ${d.value}`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 20) + "px");
+            });
 
         // 강수량 점
         svg.selectAll(".dot2")
@@ -716,7 +722,13 @@
             .attr("cx", d => x(d.date))
             .attr("cy", d => yRight(d.value))
             .attr("r", 4)
-            .attr("fill", "orange");
+            .attr("fill", "orange")
+            .on("mouseover", function(event, d) {
+                tooltip.style("opacity", 1)
+                        .html(`강수량: ${d.value}mm`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 20) + "px");
+            });
 
         //-----월별 파이 차트-----
         // 월별 집계 함수
