@@ -1,6 +1,9 @@
+<<<<<<< HEAD
 # manage.py 파일 
 
 #!/usr/bin/env python
+=======
+>>>>>>> feat_Dayoung
 """Django's command-line utility for administrative tasks."""
 import os
 import sys

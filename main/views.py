@@ -610,31 +610,31 @@ def analysis_view(request, section):
         'regression_line': regression_line,
         'stats': stats,
 
-        'total_boardings': json.dumps(total_boardings_dict),
-        'total_alightings': json.dumps(total_alightings_dict),
-        'recent_rainy': recent_rainy,
-        'recent_sunny': recent_sunny,
-        'recent_rainy_lostitem': recent_rainy_lostitem,
-        'recent_sunny_lostitem': recent_sunny_lostitem,
-        'recent_rain_mm': recent_rain_mm,
+        'total_boardings': json.dumps(total_boardings_dict), #승차인원
+        'total_alightings': json.dumps(total_alightings_dict), #하차인원
+        'recent_rainy': recent_rainy, #최근 비가 온 날
+        'recent_sunny': recent_sunny, #최근 맑았던 날
+        'recent_rainy_lostitem': recent_rainy_lostitem, #최근 비가 온 날의 분실물 정보
+        'recent_sunny_lostitem': recent_sunny_lostitem, #최근 맑았던 날의 분실물 정보
+        'recent_rain_mm': recent_rain_mm, #최근 비가 온 날의 강수량
 
-        'sunny_lostitem_perDay': sunny_lostitem_perDay,
-        'rainy_lostitem_perDay': rainy_lostitem_perDay,
-        'lostitem_percent_increse':lostitem_percent_increse,
-        'categories': categories,
-        'rainy_lostitem_perPerson': rainy_lostitem_perPerson,
-        'sunny_lostitem_perPerson': sunny_lostitem_perPerson,
+        'sunny_lostitem_perDay': sunny_lostitem_perDay, #맑은 날의 날짜당 분실률
+        'rainy_lostitem_perDay': rainy_lostitem_perDay, #비 오는 날의 날짜당 분실률
+        'lostitem_percent_increse':lostitem_percent_increse, #분실률 차이
+        'categories': categories, #분실물 카테고리
+        'rainy_lostitem_perPerson': rainy_lostitem_perPerson, #비오는 날의 인원당 분실률
+        'sunny_lostitem_perPerson': sunny_lostitem_perPerson, #맑은 날의 인원당 분실률
         'z_test': z_test,
 
-        'lineGraph': lineGraph,
-        'lineGraph_weather': lineGraph_weather,
-        'box_rainy_date': box_rainy_date,
-        'box_sunny_date': box_sunny_date,
+        'lineGraph': lineGraph, #꺾은선그래프에서 사용할 의도로 자료를 정리한 df
+        'lineGraph_weather': lineGraph_weather, #lineGraph와 같은 방식으로 날씨 정보만 고른 것
+        'box_rainy_date': box_rainy_date, #상자 수염 그래프용 비 온 날 정보
+        'box_sunny_date': box_sunny_date, #상자 수염 그래프용 맑은 날 정보
 
-        'regression_data': regression_data,
+        'regression_data': regression_data, #회귀 데이터
 
-        'dumbbell_rainy': dumbbell_rainy,
-        'dumbbell_sunny': dumbbell_sunny
+        'dumbbell_rainy': dumbbell_rainy, #덤벨 차트용 비 온 날 분실물 카테고리별 분실률 정보
+        'dumbbell_sunny': dumbbell_sunny #위와 같은 맑은 날 정보
     }
 
     if section == 'table':

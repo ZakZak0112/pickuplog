@@ -670,7 +670,7 @@
                   .attr("transform", `translate(${width - 120}, 20)`); // 위치 조정
 
         const lines = [
-            {color: "steelblue", label: "총 분실물"},
+            {color: "steelblue", label: "분실물"},
             {color: "orange", label: "강수량"}
         ];
 
@@ -695,7 +695,7 @@
 
         //툴팁 추가
         const tooltip = d3.select(".tooltip");
-
+        
         // 분실물 점
         svg.selectAll(".dot1")
             .data(data1)
@@ -705,7 +705,13 @@
             .attr("cx", d => x(d.date))
             .attr("cy", d => yLeft(d.value))
             .attr("r", 4)
-            .attr("fill", "steelblue");
+            .attr("fill", "steelblue")
+            .on("mouseover", function(event, d) {
+                tooltip.style("opacity", 1)
+                        .html(`분실물 수: ${d.value}`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 20) + "px");
+            });
 
         // 강수량 점
         svg.selectAll(".dot2")
@@ -716,7 +722,13 @@
             .attr("cx", d => x(d.date))
             .attr("cy", d => yRight(d.value))
             .attr("r", 4)
-            .attr("fill", "orange");
+            .attr("fill", "orange")
+            .on("mouseover", function(event, d) {
+                tooltip.style("opacity", 1)
+                        .html(`강수량: ${d.value}mm`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 20) + "px");
+            });
 
         //-----월별 파이 차트-----
         // 월별 집계 함수
@@ -767,20 +779,30 @@
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
-        // 툴팁 적용 (.topSlice 대상)
-        function addTooltip(svgId) {
+        // 툴팁 적용 
+        function addTooltip(svgId, tooltipText) {
             d3.selectAll("#" + svgId + " .topSlice")
-            .on("mouseover", function(event, d) {
-                tooltip.style("opacity", 1)
-                        .html(`${d.data.label}<br>값: ${d.data.value}`)
-                        .style("left", (event.pageX + 10) + "px")
-                        .style("top", (event.pageY - 20) + "px");
-            })
-            .on("mouseout", () => tooltip.style("opacity", 0));
+                .on("mouseover", function(event, d) {
+                    tooltip.style("opacity", 1)
+                            .html(`${d.data.label}<br>${tooltipText}: ${d.data.value}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 20) + "px");
+                })
+                .on("mouseout", () => tooltip.style("opacity", 0));
+
+            d3.selectAll("#"+svgId)
+                .append("text")
+                .attr("x", 175)
+                .attr("y", 330)
+                .attr("text-anchor", "middle")
+                .style("font-size", "14px")
+                .style("fill", "black")
+                .text(`월별 ${tooltipText}`);
         }
 
-        addTooltip("pieLost");
-        addTooltip("pieRain");
+
+        addTooltip("pieLost", "분실물 수");
+        addTooltip("pieRain", "강수량");
 
     </script>
     {% endif %}
@@ -943,11 +965,11 @@
 
         function createPerson() {
             const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-            use.setAttribute("href", "#person");  // defs 안에 정의한 id
+            use.setAttribute("href", "#person");
 
-            // 초기 위치 (transform 쓰지 않음!)
+            // 초기 위치
             use.setAttribute("x", START_X);
-            use.setAttribute("y", 200 + Math.random() * 30); // 약간 다른 세로 위치
+            use.setAttribute("y", 200 + Math.random() * 30); 
 
             scene.appendChild(use);
 
@@ -973,7 +995,7 @@
                 bags.forEach(bag => bag.remove());
             }
             else {
-                //날씨에 따라 떨어지는 분실물 확률 다르게 하기
+                //날씨에 따라 떨어지는 분실물 확률 다르게 하기 -> 날씨에 따라 떨어지는 분실물 양 다르게 하기
                 let random;
                 if (date == "{{recent_sunny}}") 
                 {
@@ -1168,7 +1190,6 @@
                 act.innerHTML = "ACT 2. 데이터의 반전"
                 context_title.innerHTML = "사실은 맑은 날에 더 많이 잃어버립니다!"
                 context_1.innerHTML = "데이터를 분석해보니 맑은 날의 분실물 발생량이 {{lostitem_percent_increse|floatformat:2}}배 더 높았습니다. <br> 우리의 직관과는 정반대의 결과가 나온 것이죠."
-                //23% 변경 필요?
                 context_2.innerHTML = ""
 
                 const categories = {{ categories|safe }};
@@ -1264,9 +1285,7 @@
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
-        /* ======================
-        1. 데이터 (절대 수정 X)
-        ====================== */
+        //데이터
         const dataRainy = {{ box_rainy_date|safe }};
         const dataNotRainy = {{ box_sunny_date|safe }};
 
@@ -1275,9 +1294,7 @@
         { name: "맑은 날", values: dataNotRainy, color: "orange" }
         ];
 
-        /* ======================
-        2. 기본 세팅
-        ====================== */
+        //설정 시작
         const svg = d3.select("#boxPlot");
         const margin = { top: 30, right: 30, bottom: 40, left: 60 };
         const width = +svg.attr("width") - margin.left - margin.right;
@@ -1295,9 +1312,7 @@
         .domain([0, d3.max(groups.flatMap(d => d.values)) * 1.1])
         .range([height, 0]);
 
-        /* ======================
-        3. KDE (바이올린)
-        ====================== */
+        //kde 설정
         function kernelDensityEstimator(kernel, X) {
         return V => X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
         }
@@ -1311,9 +1326,7 @@
         y.ticks(40)
         );
 
-        /* ======================
-        4. 바이올린 차트
-        ====================== */
+        //바이올린 차트 그리기
         groups.forEach(group => {
         const density = kde(group.values);
         const maxDensity = d3.max(density, d => d[1]);
@@ -1336,9 +1349,7 @@
             );
         });
 
-        /* ======================
-        5. 점 (클라우드)
-        ====================== */
+        //점 붙이기
         groups.forEach(group => {
         g.selectAll(`.dot-${group.name}`)
             .data(group.values)
@@ -1354,9 +1365,7 @@
             .attr("opacity", 0.5);
         });
 
-        /* ======================
-        6. 상자 수염 (검정색 유지)
-        ====================== */
+        //상자 수염 그래프
         function boxStats(values) {
         const sorted = values.slice().sort(d3.ascending);
         const q1 = d3.quantile(sorted, 0.25);
@@ -1373,7 +1382,7 @@
         const cx = x(group.name) + x.bandwidth() / 2;
         const boxWidth = x.bandwidth() * 0.25;
 
-        // 수염
+        //수염
         g.append("line")
             .attr("x1", cx)
             .attr("x2", cx)
@@ -1382,7 +1391,7 @@
             .attr("stroke", "black")
             .attr("stroke-width", 1);
 
-        // 상자 (채우지 않음)
+        //상자 (채우지 않음)
         g.append("rect")
             .attr("x", cx - boxWidth / 2)
             .attr("y", y(stats.q3))
@@ -1392,7 +1401,7 @@
             .attr("stroke", "black")
             .attr("stroke-width", 1);
 
-        // 중앙값
+        //중앙값
         g.append("line")
             .attr("x1", cx - boxWidth / 2)
             .attr("x2", cx + boxWidth / 2)
@@ -1402,9 +1411,7 @@
             .attr("stroke-width", 1);
         });
 
-        /* ======================
-        7. 축
-        ====================== */
+        //축 그리기
         g.append("g")
         .attr("transform", `translate(0,${height})`)
         .call(d3.axisBottom(x));
