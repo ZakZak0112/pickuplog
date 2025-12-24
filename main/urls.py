@@ -2,10 +2,9 @@ from django.urls import path
 from main import views
 
 urlpatterns = [
-    # 1. Home 및 분석 페이지 연결
     path('', views.analysis_view, {'section': 'visualization'}, name='analysis_visualization'),
 
-    # 2. LostItem CRUD 및 아카이브 연결
+    #LostItem 아카이브
     path('archive/lostitem/', views.lostitem_list, name='lostitem_list'), 
     path('archive/lostitem/create/', views.lostitem_create, name='lostitem_create'), 
     path('archive/lostitem/update/<int:pk>/', views.lostitem_update, name='lostitem_update'),
